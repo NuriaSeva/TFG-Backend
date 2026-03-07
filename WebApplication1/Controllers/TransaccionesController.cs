@@ -1,0 +1,142 @@
+﻿using FindMind.Data;
+using FindMind.Exceptions;
+using FindMind.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace FindMind.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class TransaccionesController : ControllerBase
+{
+    private readonly FindMindDbContext _context;
+
+    public TransaccionesController(FindMindDbContext context)
+    {
+        _context = context;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<Transaccion>>> ObtenerTodas()
+    {
+        var transacciones = await _context.Transacciones
+            .Include(t => t.Usuario)
+            .Include(t => t.CuentaBancaria)
+            .Include(t => t.Categoria)
+            .OrderByDescending(t => t.Fecha)
+            .ToListAsync();
+
+        return Ok(transacciones);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Transaccion>> ObtenerPorId(Guid id)
+    {
+        var transaccion = await _context.Transacciones
+            .Include(t => t.Usuario)
+            .Include(t => t.CuentaBancaria)
+            .Include(t => t.Categoria)
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (transaccion == null)
+            throw new NotFoundException("No se ha encontrado la transacción.");
+
+        return Ok(transaccion);
+    }
+
+    [HttpGet("usuario/{usuarioId}")]
+    public async Task<ActionResult<IEnumerable<Transaccion>>> ObtenerPorUsuario(Guid usuarioId)
+    {
+        var transacciones = await _context.Transacciones
+            .Include(t => t.CuentaBancaria)
+            .Include(t => t.Categoria)
+            .Where(t => t.UsuarioId == usuarioId)
+            .OrderByDescending(t => t.Fecha)
+            .ToListAsync();
+
+        return Ok(transacciones);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<Transaccion>> Crear(Transaccion transaccion)
+    {
+        var usuarioExiste = await _context.Usuarios.AnyAsync(u => u.Id == transaccion.UsuarioId);
+        if (!usuarioExiste)
+            throw new BadRequestException("El usuario indicado no existe.");
+
+        var cuentaExiste = await _context.CuentasBancarias.AnyAsync(c => c.Id == transaccion.CuentaBancariaId);
+        if (!cuentaExiste)
+            throw new BadRequestException("La cuenta indicada no existe.");
+
+        if (transaccion.CategoriaId.HasValue)
+        {
+            var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == transaccion.CategoriaId.Value);
+            if (!categoriaExiste)
+                throw new BadRequestException("La categoría indicada no existe.");
+        }
+
+        transaccion.Id = Guid.NewGuid();
+        transaccion.FechaCreacion = DateTime.UtcNow;
+
+        _context.Transacciones.Add(transaccion);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(ObtenerPorId), new { id = transaccion.Id }, transaccion);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Actualizar(Guid id, Transaccion transaccion)
+    {
+        if (id != transaccion.Id)
+            throw new BadRequestException("El id de la URL no coincide con el del cuerpo.");
+
+        var transaccionActual = await _context.Transacciones.FindAsync(id);
+        if (transaccionActual == null)
+            throw new NotFoundException("No se ha encontrado la transacción.");
+
+        var usuarioExiste = await _context.Usuarios.AnyAsync(u => u.Id == transaccion.UsuarioId);
+        if (!usuarioExiste)
+            throw new BadRequestException("El usuario indicado no existe.");
+
+        var cuentaExiste = await _context.CuentasBancarias.AnyAsync(c => c.Id == transaccion.CuentaBancariaId);
+        if (!cuentaExiste)
+            throw new BadRequestException("La cuenta indicada no existe.");
+
+        if (transaccion.CategoriaId.HasValue)
+        {
+            var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == transaccion.CategoriaId.Value);
+            if (!categoriaExiste)
+                throw new BadRequestException("La categoría indicada no existe.");
+        }
+
+        transaccionActual.UsuarioId = transaccion.UsuarioId;
+        transaccionActual.CuentaBancariaId = transaccion.CuentaBancariaId;
+        transaccionActual.CategoriaId = transaccion.CategoriaId;
+        transaccionActual.Importe = transaccion.Importe;
+        transaccionActual.Moneda = transaccion.Moneda;
+        transaccionActual.Tipo = transaccion.Tipo;
+        transaccionActual.Origen = transaccion.Origen;
+        transaccionActual.Fecha = transaccion.Fecha;
+        transaccionActual.Descripcion = transaccion.Descripcion;
+        transaccionActual.IdTransaccionExterna = transaccion.IdTransaccionExterna;
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Eliminar(Guid id)
+    {
+        var transaccion = await _context.Transacciones.FindAsync(id);
+
+        if (transaccion == null)
+            throw new NotFoundException("No se ha encontrado la transacción.");
+
+        _context.Transacciones.Remove(transaccion);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+}
