@@ -1,4 +1,4 @@
-﻿using FindMind.Models;
+﻿using FindMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
 
 namespace FindMind.Data;

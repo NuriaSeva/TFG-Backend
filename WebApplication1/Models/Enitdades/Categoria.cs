@@ -1,4 +1,4 @@
-﻿namespace FindMind.Models;
+﻿namespace FindMind.Models.Enitdades;
 
 public enum TipoCategoria
 {

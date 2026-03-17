@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FindMind.Controllers;
 
+
 [ApiController]
 [Route("api/[controller]")]
 public class ConexionesBancariasController : ControllerBase
@@ -37,6 +38,7 @@ public class ConexionesBancariasController : ControllerBase
         var transacciones = await _trueLayerService.ObtenerTransaccionesRawAsync(accountId, accessToken, cancellationToken);
         return Content(transacciones, "application/json");
     }
+
 }
 
 public class ObtenerTokenRequest

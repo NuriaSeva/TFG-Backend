@@ -1,8 +1,9 @@
 using FindMind.Data;
+using FindMind.IServices;
 using FindMind.Middleware;
-using Microsoft.EntityFrameworkCore;
 using FindMind.Models;
 using FindMind.Services;
+using Microsoft.EntityFrameworkCore;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,9 +17,10 @@ builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.Configure<TrueLayerOptions>(
-    builder.Configuration.GetSection("TrueLayer"));
+builder.Services.Configure<TinkOptions>(
+    builder.Configuration.GetSection("Tink"));
 
+builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
 builder.Services.AddHttpClient<TrueLayerService>();
 var app = builder.Build();
 

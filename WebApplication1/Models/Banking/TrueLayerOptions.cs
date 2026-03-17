@@ -1,4 +1,4 @@
-﻿namespace FindMind.Models;
+﻿namespace FindMind.Models.Banking;
 
 public class TrueLayerOptions
 {

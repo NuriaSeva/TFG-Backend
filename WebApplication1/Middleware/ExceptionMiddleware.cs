@@ -1,6 +1,6 @@
 ﻿using System.Net;
 using System.Text.Json;
-using FindMind.Exceptions;
+using FindMind.Common.Exceptions;
 
 namespace FindMind.Middleware;
 

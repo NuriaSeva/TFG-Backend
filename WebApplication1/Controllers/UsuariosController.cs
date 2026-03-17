@@ -1,6 +1,6 @@
 ﻿using FindMind.Data;
 using FindMind.Exceptions;
-using FindMind.Models;
+using FindMind.Models.Enitdades;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 

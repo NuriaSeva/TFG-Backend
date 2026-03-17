@@ -1,4 +1,4 @@
-﻿namespace FindMind.Exceptions;
+﻿namespace FindMind.Common.Exceptions;
 
 public class BadRequestException : Exception
 {
