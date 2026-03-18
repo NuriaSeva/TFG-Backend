@@ -1,4 +1,4 @@
-﻿using FindMind.IServices;
+﻿using FindMind.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]

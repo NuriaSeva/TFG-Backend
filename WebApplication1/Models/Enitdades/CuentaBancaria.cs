@@ -22,6 +22,10 @@ public class CuentaBancaria
 
     public string? Tipo { get; set; }
 
+    public decimal? SaldoActual { get; set; }
+
+    public DateTime? FechaUltimaSincronizacion { get; set; }
+
     public bool Activa { get; set; } = true;
 
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;

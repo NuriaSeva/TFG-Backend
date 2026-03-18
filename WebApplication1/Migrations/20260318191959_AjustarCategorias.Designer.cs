@@ -4,6 +4,7 @@ using FindMind.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FindMind.Migrations
 {
     [DbContext(typeof(FindMindDbContext))]
-    partial class FindMindDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260318191959_AjustarCategorias")]
+    partial class AjustarCategorias
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -84,9 +87,6 @@ namespace FindMind.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)");
-
-                    b.Property<int>("Tipo")
-                        .HasColumnType("int");
 
                     b.Property<Guid?>("UsuarioId")
                         .HasColumnType("char(36)");

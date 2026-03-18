@@ -178,7 +178,10 @@ public class FindMindDbContext : DbContext
                 .HasForeignKey(e => e.UsuarioId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasIndex(e => new { e.UsuarioId, e.Nombre, e.Tipo });
+            entity.HasIndex(e => e.UsuarioId);
+
+            entity.HasIndex(e => new { e.UsuarioId, e.Nombre })
+                .IsUnique();
         });
     }
 
@@ -212,6 +215,10 @@ public class FindMindDbContext : DbContext
 
             entity.Property(e => e.Tipo)
                 .HasMaxLength(50);
+
+            // Si añades SaldoActual en la entidad, puedes dejar esto:
+            // entity.Property(e => e.SaldoActual)
+            //     .HasPrecision(18, 2);
 
             entity.HasOne(e => e.Usuario)
                 .WithOne(u => u.CuentaBancaria)

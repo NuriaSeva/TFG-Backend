@@ -1,5 +1,5 @@
 using FindMind.Data;
-using FindMind.IServices;
+using FindMind.Interfaces;
 using FindMind.Middleware;
 using FindMind.Models;
 using FindMind.Services;
@@ -21,7 +21,8 @@ builder.Services.Configure<TinkOptions>(
     builder.Configuration.GetSection("Tink"));
 
 builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
-builder.Services.AddHttpClient<TrueLayerService>();
+
+builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

@@ -1,6 +1,8 @@
-﻿using FindMind.Data;
-using FindMind.Exceptions;
+﻿using FindMind.Common.Exceptions;
+using FindMind.Data;
+using FindMind.Interfaces;
 using FindMind.Models.Enitdades;
+using FindMind.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,10 +13,26 @@ namespace FindMind.Controllers;
 public class CategoriasController : ControllerBase
 {
     private readonly FindMindDbContext _context;
+    private readonly ICategoriaSeedService _categoriaSeedService;
 
-    public CategoriasController(FindMindDbContext context)
+    public CategoriasController(FindMindDbContext context, ICategoriaSeedService categoriaSeedService)
     {
         _context = context;
+        _categoriaSeedService = categoriaSeedService;
+
+    }
+
+    [HttpPost("importar-tink")]
+    public async Task<IActionResult> ImportarCategoriasTink([FromQuery] string locale = "es_ES")
+    {
+        var total = await _categoriaSeedService.ImportarCategoriasDesdeTinkAsync(locale);
+
+        return Ok(new
+        {
+            mensaje = "Categorías importadas correctamente",
+            totalInsertadas = total,
+            locale
+        });
     }
 
     [HttpGet]
@@ -94,7 +112,6 @@ public class CategoriasController : ControllerBase
 
         categoriaActual.UsuarioId = categoria.UsuarioId;
         categoriaActual.Nombre = categoria.Nombre;
-        categoriaActual.Tipo = categoria.Tipo;
         categoriaActual.Color = categoria.Color;
         categoriaActual.Icono = categoria.Icono;
         categoriaActual.EsSistema = categoria.EsSistema;
