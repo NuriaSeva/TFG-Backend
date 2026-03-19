@@ -8,6 +8,20 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var corsPolicy = "AllowIonicApp";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(corsPolicy, policy =>
+    {
+        policy
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowAnyOrigin();
+    });
+});
+
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                       ?? throw new InvalidOperationException("No se encontró la cadena de conexión");
 
@@ -23,8 +37,10 @@ builder.Services.Configure<TinkOptions>(
 builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
 
 builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
+
 var app = builder.Build();
 
+app.UseCors(corsPolicy);
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
