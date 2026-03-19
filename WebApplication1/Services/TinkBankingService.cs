@@ -277,6 +277,7 @@ public class TinkBankingService : ITinkBankingService
             Iban = cuentaExistente.Iban,
             Moneda = cuentaExistente.Moneda,
             Tipo = cuentaExistente.Tipo,
+            FechaUltimaSincronizacion= cuentaExistente.FechaUltimaSincronizacion,
             SaldoActual = cuentaExistente.SaldoActual
         };
     }

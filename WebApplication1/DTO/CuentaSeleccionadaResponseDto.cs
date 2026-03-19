@@ -10,4 +10,5 @@ public class CuentaSeleccionadaResponseDto
     public string Moneda { get; set; } = "EUR";
     public string? Tipo { get; set; }
     public decimal? SaldoActual { get; set; }
+    public DateTime? FechaUltimaSincronizacion { get; set; }
 }

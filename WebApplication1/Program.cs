@@ -52,6 +52,35 @@ app.UseMiddleware<ExceptionMiddleware>();
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
+app.MapGet("/", () => "FindMind API funcionando correctamente");
+app.MapGet("/health/db", async (FindMindDbContext db) =>
+{
+    try
+    {
+        var canConnect = await db.Database.CanConnectAsync();
+
+        if (canConnect)
+        {
+            return Results.Ok(new
+            {
+                status = "ok",
+                database = "connected"
+            });
+        }
+
+        return Results.Problem(
+            title: "Database connection failed",
+            detail: "No se pudo conectar con la base de datos.",
+            statusCode: 500);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(
+            title: "Database error",
+            detail: ex.Message,
+            statusCode: 500);
+    }
+});
 
 app.MapControllers();
 
