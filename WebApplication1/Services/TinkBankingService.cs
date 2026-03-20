@@ -369,6 +369,29 @@ public class TinkBankingService : ITinkBankingService
 
         return rawJson;
     }
+    public async Task<CuentaSeleccionadaResponseDto> ProcesarCallbackYGuardarCuentaAsync(
+    string localUserId,
+    IDictionary<string, string> queryParams)
+    {
+        var callbackResult = await HandleAccountCheckCallbackAsync(localUserId, queryParams);
+
+        if (!callbackResult.Success)
+        {
+            throw new InvalidOperationException(
+                $"Tink devolvió error: {callbackResult.Error} - {callbackResult.ErrorDescription}");
+        }
+
+        if (string.IsNullOrWhiteSpace(callbackResult.AccountVerificationReportId))
+        {
+            throw new InvalidOperationException("Tink no devolvió account_verification_report_id.");
+        }
+      
+        var usuarioId = Guid.Parse(localUserId);
+
+        return await GuardarCuentaDesdeAccountCheckAsync(
+            usuarioId,
+            callbackResult.AccountVerificationReportId);
     }
+}
 
    

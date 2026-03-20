@@ -21,4 +21,7 @@ public interface ITinkBankingService
 
     Task<object> ExchangeCodeAsync(string localUserId, string code);
     Task<CuentaSeleccionadaResponseDto> GuardarCuentaDesdeAccountCheckAsync(Guid usuarioId, string reportId);
+    Task<CuentaSeleccionadaResponseDto> ProcesarCallbackYGuardarCuentaAsync(
+    string localUserId,
+    IDictionary<string, string> queryParams);
 }

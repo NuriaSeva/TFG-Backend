@@ -1,6 +1,7 @@
 ﻿using FindMind.DTO;
 using FindMind.DTO.Banking;
 using FindMind.Interfaces;
+using FindMind.Services;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -22,13 +23,28 @@ public class BankingController : ControllerBase
     }
 
     [HttpGet("callback")]
-    public async Task<IActionResult> Callback([FromQuery] string localUserId )
+    public async Task<IActionResult> Callback(
+    [FromQuery] string localUserId)
     {
-        var queryParams = Request.Query
-            .ToDictionary(k => k.Key, v => v.Value.ToString());
+        var userId = localUserId;
+        try
+        {
+            var queryParams = Request.Query
+                .ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.ToString()
+                );
 
-        var result = await _service.HandleAccountCheckCallbackAsync(localUserId, queryParams);
-        return Ok(result);
+            await  _service.ProcesarCallbackYGuardarCuentaAsync(
+                localUserId,
+                queryParams);
+
+            return Redirect("findmind://callback?status=connected");
+        }
+        catch (Exception ex)
+        {
+            return Redirect("findmind://callback?status=error&message=" + Uri.EscapeDataString(ex.Message));
+        }
     }
 
     [HttpGet("account-check/last-result")]

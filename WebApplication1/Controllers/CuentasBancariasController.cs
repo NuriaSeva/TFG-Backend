@@ -1,4 +1,5 @@
 ﻿using FindMind.Data;
+using FindMind.DTO;
 using FindMind.Models.Enitdades;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,20 +20,27 @@ public class CuentasBancariasController : ControllerBase
     [HttpGet("usuario/{usuarioId}")]
     public async Task<ActionResult<CuentaBancaria>> GetCuentaPorUsuario(Guid usuarioId)
     {
-        try
+        var cuenta = await _context.CuentasBancarias
+        .Where(c => c.UsuarioId == usuarioId && c.Activa)
+        .OrderByDescending(c => c.FechaUltimaSincronizacion)
+        .Select(c => new CuentaSeleccionadaResponseDto
         {
-            var cuenta = await _context.CuentasBancarias
-                .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId);
+            Id = c.Id,
+            IdCuentaExterna = c.IdCuentaExterna,
+            Nombre = c.Nombre,
+            Banco = c.Banco,
+            Iban = c.Iban,
+            Moneda = c.Moneda,
+            Tipo = c.Tipo,
+            FechaUltimaSincronizacion = c.FechaUltimaSincronizacion,
+            SaldoActual = c.SaldoActual
+        })
+        .FirstOrDefaultAsync();
 
-            if (cuenta == null)
-                return NotFound("El usuario no tiene cuenta bancaria.");
+        if (cuenta == null)
+            return NotFound();
 
-            return Ok(cuenta);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"Error obteniendo la cuenta: {ex.Message}");
-        }
+        return Ok(cuenta);
     }
 
     [HttpPost]
