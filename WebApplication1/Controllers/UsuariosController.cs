@@ -1,18 +1,18 @@
-﻿using FindMind.Data;
-using FindMind.Common.Exceptions;
-using FindMind.Models.Enitdades;
+﻿using FinMind.Data;
+using FinMind.Common.Exceptions;
+using FinMind.Models.Enitdades;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace FindMind.Controllers;
+namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class UsuariosController : ControllerBase
 {
-    private readonly FindMindDbContext _context;
+    private readonly FinMindDbContext _context;
 
-    public UsuariosController(FindMindDbContext context)
+    public UsuariosController(FinMindDbContext context)
     {
         _context = context;
     }

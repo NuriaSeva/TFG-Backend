@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace FindMind.Migrations
+namespace FinMind.Migrations
 {
     /// <inheritdoc />
     public partial class AjustesCategoriaIndiceYCuenta : Migration

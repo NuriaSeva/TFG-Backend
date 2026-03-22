@@ -1,18 +1,19 @@
-﻿using FindMind.Data;
-using FindMind.Common.Exceptions;
-using FindMind.Models.Enitdades;
+﻿using FinMind.Common.Exceptions;
+using FinMind.Data;
+using FinMind.Interfaces;
+using FinMind.Models.Enitdades;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace FindMind.Controllers;
+namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class TransaccionesController : ControllerBase
 {
-    private readonly FindMindDbContext _context;
+    private readonly FinMindDbContext _context;
 
-    public TransaccionesController(FindMindDbContext context)
+    public TransaccionesController(FinMindDbContext context)
     {
         _context = context;
     }
@@ -138,5 +139,14 @@ public class TransaccionesController : ControllerBase
         await _context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    [HttpPost("sincronizar/{usuarioId:guid}")]
+    public async Task<IActionResult> SincronizarDesdeTink(
+    Guid usuarioId,
+    [FromServices] ITransaccionesService transaccionesService)
+    {
+        var resultado = await transaccionesService.SincronizarDesdeTinkAsync(usuarioId);
+        return Ok(resultado);
     }
 }

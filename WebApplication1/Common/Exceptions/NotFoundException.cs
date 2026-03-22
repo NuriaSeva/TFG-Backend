@@ -1,4 +1,4 @@
-﻿namespace FindMind.Common.Exceptions;
+﻿namespace FinMind.Common.Exceptions;
 
 public class NotFoundException : Exception
 {

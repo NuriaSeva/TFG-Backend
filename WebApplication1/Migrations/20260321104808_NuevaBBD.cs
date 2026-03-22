@@ -5,25 +5,18 @@
 namespace FinMind.Migrations
 {
     /// <inheritdoc />
-    public partial class AjustarCategorias : Migration
+    public partial class NuevaBBD : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Tipo",
-                table: "categorias");
+
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "Tipo",
-                table: "categorias",
-                type: "int",
-                nullable: false,
-                defaultValue: 0);
+
         }
     }
 }

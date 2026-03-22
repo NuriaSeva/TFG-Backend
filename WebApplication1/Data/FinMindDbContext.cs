@@ -1,11 +1,11 @@
-﻿using FindMind.Models.Enitdades;
+﻿using FinMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
 
-namespace FindMind.Data;
+namespace FinMind.Data;
 
-public class FindMindDbContext : DbContext
+public class FinMindDbContext : DbContext
 {
-    public FindMindDbContext(DbContextOptions<FindMindDbContext> options)
+    public FinMindDbContext(DbContextOptions<FinMindDbContext> options)
         : base(options)
     {
     }

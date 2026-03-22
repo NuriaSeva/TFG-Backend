@@ -1,36 +1,51 @@
-﻿namespace FindMind.DTO.Banking;
+﻿using System.Text.Json.Serialization;
+
+namespace FinMind.DTO.Banking;
 
 public class TinkAccountsResponseDto
 {
-    public List<TinkAccountDto> Accounts { get; set; } = new();
+    [JsonPropertyName("accounts")]
+    public List<TinkDataAccountDto>? Accounts { get; set; }
+
+    [JsonPropertyName("nextPageToken")]
+    public string? NextPageToken { get; set; }
 }
 
-public class TinkAccountDto
+public class TinkDataAccountDto
 {
-    public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("name")]
     public string? Name { get; set; }
-    public string? CurrencyCode { get; set; }
+
+    [JsonPropertyName("type")]
     public string? Type { get; set; }
-    public string? FinancialInstitutionName { get; set; }
-    public string? BankAccountType { get; set; }
-    public string? AccountCategory { get; set; }
 
-    public TinkAccountNumberDto? AccountNumber { get; set; }
-
-    public List<TinkBalanceDto> Balances { get; set; } = new();
+    [JsonPropertyName("identifiers")]
+    public TinkAccountIdentifiersDto? Identifiers { get; set; }
 }
 
-public class TinkAccountNumberDto
+public class TinkAccountIdentifiersDto
 {
+    [JsonPropertyName("iban")]
+    public TinkIbanIdentifierDto? Iban { get; set; }
+
+    [JsonPropertyName("financialInstitution")]
+    public TinkFinancialInstitutionIdentifierDto? FinancialInstitution { get; set; }
+}
+
+public class TinkIbanIdentifierDto
+{
+    [JsonPropertyName("iban")]
     public string? Iban { get; set; }
-    public string? Bic { get; set; }
-    public string? Number { get; set; }
-    public string? SortCode { get; set; }
+
+    [JsonPropertyName("bban")]
+    public string? Bban { get; set; }
 }
 
-public class TinkBalanceDto
+public class TinkFinancialInstitutionIdentifierDto
 {
-    public decimal? Balance { get; set; }
-    public string? CurrencyCode { get; set; }
-    public string? ReferenceDate { get; set; }
+    [JsonPropertyName("accountNumber")]
+    public string? AccountNumber { get; set; }
 }

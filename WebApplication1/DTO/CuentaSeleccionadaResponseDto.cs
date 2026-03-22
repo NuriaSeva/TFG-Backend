@@ -1,4 +1,4 @@
-﻿namespace FindMind.DTO;
+﻿namespace FinMind.DTO;
 
 public class CuentaSeleccionadaResponseDto
 {

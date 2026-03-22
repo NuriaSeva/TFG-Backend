@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace FindMind.DTOs.Banking;
+namespace FinMind.DTOs.Banking;
 
 public class TinkCategoriaDto
 {

@@ -1,4 +1,4 @@
-﻿namespace FindMind.Models.Enitdades;
+﻿namespace FinMind.Models.Enitdades;
 
 public enum EstadoSincronizacion
 {

@@ -1,8 +1,8 @@
-using FindMind.Data;
-using FindMind.Interfaces;
-using FindMind.Middleware;
-using FindMind.Models;
-using FindMind.Services;
+using FinMind.Data;
+using FinMind.Interfaces;
+using FinMind.Middleware;
+using FinMind.Models;
+using FinMind.Services;
 using Microsoft.EntityFrameworkCore;
 
 
@@ -25,7 +25,7 @@ builder.Services.AddCors(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                       ?? throw new InvalidOperationException("No se encontró la cadena de conexión");
 
-builder.Services.AddDbContext<FindMindDbContext>(options =>
+builder.Services.AddDbContext<FinMindDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 builder.Services.AddControllers();
 
@@ -37,6 +37,8 @@ builder.Services.Configure<TinkOptions>(
 builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
 
 builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
+
+builder.Services.AddScoped<ITransaccionesService, TransaccionesService>();
 
 var app = builder.Build();
 
@@ -52,8 +54,8 @@ app.UseMiddleware<ExceptionMiddleware>();
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
-app.MapGet("/", () => "FindMind API funcionando correctamente");
-app.MapGet("/health/db", async (FindMindDbContext db) =>
+app.MapGet("/", () => "FinMind API funcionando correctamente");
+app.MapGet("/health/db", async (FinMindDbContext db) =>
 {
     try
     {

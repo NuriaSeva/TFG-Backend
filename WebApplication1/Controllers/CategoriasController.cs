@@ -1,21 +1,21 @@
-﻿using FindMind.Common.Exceptions;
-using FindMind.Data;
-using FindMind.Interfaces;
-using FindMind.Models.Enitdades;
-using FindMind.Services;
+﻿using FinMind.Common.Exceptions;
+using FinMind.Data;
+using FinMind.Interfaces;
+using FinMind.Models.Enitdades;
+using FinMind.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace FindMind.Controllers;
+namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class CategoriasController : ControllerBase
 {
-    private readonly FindMindDbContext _context;
+    private readonly FinMindDbContext _context;
     private readonly ICategoriaSeedService _categoriaSeedService;
 
-    public CategoriasController(FindMindDbContext context, ICategoriaSeedService categoriaSeedService)
+    public CategoriasController(FinMindDbContext context, ICategoriaSeedService categoriaSeedService)
     {
         _context = context;
         _categoriaSeedService = categoriaSeedService;

@@ -1,19 +1,19 @@
-﻿using FindMind.Data;
-using FindMind.DTO.Banking;
-using FindMind.DTOs.Banking;
-using FindMind.Interfaces;
-using FindMind.Models.Enitdades;
+﻿using FinMind.Data;
+using FinMind.DTO.Banking;
+using FinMind.DTOs.Banking;
+using FinMind.Interfaces;
+using FinMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
-namespace FindMind.Services;
+namespace FinMind.Services;
 
 public class CategoriaSeedService : ICategoriaSeedService
 {
     private readonly HttpClient _httpClient;
-    private readonly FindMindDbContext _context;
+    private readonly FinMindDbContext _context;
 
-    public CategoriaSeedService(HttpClient httpClient, FindMindDbContext context)
+    public CategoriaSeedService(HttpClient httpClient, FinMindDbContext context)
     {
         _httpClient = httpClient;
         _context = context;

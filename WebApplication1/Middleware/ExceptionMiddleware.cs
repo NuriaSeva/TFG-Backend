@@ -1,8 +1,8 @@
 ﻿using System.Net;
 using System.Text.Json;
-using FindMind.Common.Exceptions;
+using FinMind.Common.Exceptions;
 
-namespace FindMind.Middleware;
+namespace FinMind.Middleware;
 
 public class ExceptionMiddleware
 {

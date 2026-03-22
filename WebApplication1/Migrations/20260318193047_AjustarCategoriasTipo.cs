@@ -2,7 +2,7 @@
 
 #nullable disable
 
-namespace FindMind.Migrations
+namespace FinMind.Migrations
 {
     /// <inheritdoc />
     public partial class AjustarCategoriasTipo : Migration

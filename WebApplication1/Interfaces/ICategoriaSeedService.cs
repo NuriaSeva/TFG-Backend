@@ -1,4 +1,4 @@
-﻿namespace FindMind.Interfaces
+﻿namespace FinMind.Interfaces
 {
     public interface ICategoriaSeedService
     {

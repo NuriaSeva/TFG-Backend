@@ -1,4 +1,4 @@
-﻿namespace FindMind.DTO.Banking
+﻿namespace FinMind.DTO.Banking
 {
     public class TinkTokenResponse
     {

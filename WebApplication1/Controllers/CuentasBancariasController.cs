@@ -1,18 +1,18 @@
-﻿using FindMind.Data;
-using FindMind.DTO;
-using FindMind.Models.Enitdades;
+﻿using FinMind.Data;
+using FinMind.DTO;
+using FinMind.Models.Enitdades;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace FindMind.Controllers;
+namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class CuentasBancariasController : ControllerBase
 {
-    private readonly FindMindDbContext _context;
+    private readonly FinMindDbContext _context;
 
-    public CuentasBancariasController(FindMindDbContext context)
+    public CuentasBancariasController(FinMindDbContext context)
     {
         _context = context;
     }

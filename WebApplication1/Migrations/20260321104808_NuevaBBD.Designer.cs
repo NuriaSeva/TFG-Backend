@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FinMind.Migrations
 {
     [DbContext(typeof(FinMindDbContext))]
-    [Migration("20260319184354_migrarAzure")]
-    partial class migrarAzure
+    [Migration("20260321104808_NuevaBBD")]
+    partial class NuevaBBD
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
