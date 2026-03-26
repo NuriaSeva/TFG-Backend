@@ -39,11 +39,11 @@ public class BankingController : ControllerBase
                 localUserId,
                 queryParams);
 
-            return Redirect("FinMind://callback?status=connected");
+            return Redirect("finmind://callback?status=connected");
         }
         catch (Exception ex)
         {
-            return Redirect("FinMind://callback?status=error&message=" + Uri.EscapeDataString(ex.Message));
+            return Redirect("finmind://callback?status=error&message=" + Uri.EscapeDataString(ex.Message));
         }
     }
 

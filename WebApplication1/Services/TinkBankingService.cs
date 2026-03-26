@@ -36,13 +36,13 @@ public class TinkBankingService : ITinkBankingService
     public Task<object> GetLoginUrlAsync(string localUserId)
     {
         var state = Guid.NewGuid().ToString("N");
-        var separator = _options.LinkUrl.Contains('?') ? "&" : "?";
+        var separator = _options.LinkUrlCuentas.Contains('?') ? "&" : "?";
 
         var callbackUri =
             $"{_options.RedirectUri}?localUserId={Uri.EscapeDataString(localUserId)}";
 
         var loginUrl =
-            $"{_options.LinkUrl}" +
+            $"{_options.LinkUrlCuentas}" +
             $"{separator}redirect_uri={Uri.EscapeDataString(callbackUri)}" +
             $"&state={Uri.EscapeDataString(state)}" +
             $"&auto_redirect_mobile=true";
@@ -314,13 +314,13 @@ public class TinkBankingService : ITinkBankingService
     public Task<object> GetTransactionsLoginUrlAsync(string localUserId)
     {
         var state = Guid.NewGuid().ToString("N");
-        var separator = _options.LinkUrl.Contains('?') ? "&" : "?";
+        var separator = _options.LinkUrlTransacciones.Contains('?') ? "&" : "?";
 
         var callbackUri =
             $"{_options.RedirectUriTransactions}?localUserId={Uri.EscapeDataString(localUserId)}";
 
         var loginUrl =
-            $"{_options.LinkUrl}" +
+            $"{_options.LinkUrlTransacciones}" +
             $"{separator}redirect_uri={Uri.EscapeDataString(callbackUri)}" +
             $"&state={Uri.EscapeDataString(state)}" +
             $"&auto_redirect_mobile=true";

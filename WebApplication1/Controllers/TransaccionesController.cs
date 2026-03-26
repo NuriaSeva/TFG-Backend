@@ -1,7 +1,9 @@
 ﻿using FinMind.Common.Exceptions;
 using FinMind.Data;
+using FinMind.DTO;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
+using FinMind.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,9 +15,12 @@ public class TransaccionesController : ControllerBase
 {
     private readonly FinMindDbContext _context;
 
-    public TransaccionesController(FinMindDbContext context)
+    private readonly ITransaccionesService _transaccionesService;
+
+    public TransaccionesController(FinMindDbContext context, ITransaccionesService transaccionesService)
     {
         _context = context;
+        _transaccionesService = transaccionesService;
     }
 
     [HttpGet]
@@ -45,48 +50,14 @@ public class TransaccionesController : ControllerBase
 
         return Ok(transaccion);
     }
-
-    [HttpGet("usuario/{usuarioId}")]
-    public async Task<ActionResult<IEnumerable<Transaccion>>> ObtenerPorUsuario(Guid usuarioId)
+    [HttpPost("crear")]
+    public async Task<IActionResult> CrearManual([FromBody] CrearTransaccionManualRequestDto request)
     {
-        var transacciones = await _context.Transacciones
-            .Include(t => t.CuentaBancaria)
-            .Include(t => t.Categoria)
-            .Where(t => t.UsuarioId == usuarioId)
-            .OrderByDescending(t => t.Fecha)
-            .ToListAsync();
-
-        return Ok(transacciones);
+        var resultado = await _transaccionesService.CrearManualAsync(request);
+        return Ok(resultado);
     }
 
-    [HttpPost]
-    public async Task<ActionResult<Transaccion>> Crear(Transaccion transaccion)
-    {
-        var usuarioExiste = await _context.Usuarios.AnyAsync(u => u.Id == transaccion.UsuarioId);
-        if (!usuarioExiste)
-            throw new BadRequestException("El usuario indicado no existe.");
-
-        var cuentaExiste = await _context.CuentasBancarias.AnyAsync(c => c.Id == transaccion.CuentaBancariaId);
-        if (!cuentaExiste)
-            throw new BadRequestException("La cuenta indicada no existe.");
-
-        if (transaccion.CategoriaId.HasValue)
-        {
-            var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == transaccion.CategoriaId.Value);
-            if (!categoriaExiste)
-                throw new BadRequestException("La categoría indicada no existe.");
-        }
-
-        transaccion.Id = Guid.NewGuid();
-        transaccion.FechaCreacion = DateTime.UtcNow;
-
-        _context.Transacciones.Add(transaccion);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(ObtenerPorId), new { id = transaccion.Id }, transaccion);
-    }
-
-    [HttpPut("{id}")]
+    [HttpPut("modificar/{id}")]
     public async Task<IActionResult> Actualizar(Guid id, Transaccion transaccion)
     {
         if (id != transaccion.Id)
@@ -143,10 +114,30 @@ public class TransaccionesController : ControllerBase
 
     [HttpPost("sincronizar/{usuarioId:guid}")]
     public async Task<IActionResult> SincronizarDesdeTink(
-    Guid usuarioId,
-    [FromServices] ITransaccionesService transaccionesService)
+    Guid usuarioId)
     {
-        var resultado = await transaccionesService.SincronizarDesdeTinkAsync(usuarioId);
+        var resultado = await _transaccionesService.SincronizarDesdeTinkAsync(usuarioId);
+        return Ok(resultado);
+    }
+    [HttpGet("obtener/{usuarioId:guid}")]
+    public async Task<IActionResult> ObtenerPorUsuario(
+       Guid usuarioId,
+       [FromQuery] int? mes,
+       [FromQuery] int? anio,
+       [FromQuery] int? tipo,
+       [FromQuery] string? texto,
+       [FromQuery] int pagina = 1,
+       [FromQuery] int tamanyo = 20)
+    {
+        var resultado = await _transaccionesService.ObtenerPorUsuarioAsync(
+            usuarioId,
+            mes,
+            anio,
+            tipo,
+            texto,
+            pagina,
+            tamanyo);
+
         return Ok(resultado);
     }
 }

@@ -21,6 +21,98 @@ public class TransaccionesService : ITransaccionesService
         _tinkBankingService = tinkBankingService;
     }
 
+    public async Task<PaginacionDTO<TransaccionesUsuarioResponseDto>> ObtenerPorUsuarioAsync(
+    Guid usuarioId,
+    int? mes = null,
+    int? anio = null,
+    int? tipo = null,
+    string? texto = null,
+    int pagina = 1,
+    int tamanyo = 20)
+    {
+        if (usuarioId == Guid.Empty)
+            throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
+
+        if (pagina < 1)
+            pagina = 1;
+
+        if (tamanyo < 1)
+            tamanyo = 20;
+
+        if (tamanyo > 100)
+            tamanyo = 100;
+
+        var query = _context.Transacciones
+            .AsNoTracking()
+            .Where(t => t.UsuarioId == usuarioId);
+
+        if (anio.HasValue)
+        {
+            query = query.Where(t => t.Fecha.Year == anio.Value);
+        }
+
+        if (mes.HasValue)
+        {
+            query = query.Where(t => t.Fecha.Month == mes.Value);
+        }
+
+        if (tipo.HasValue)
+        {
+            TipoTransaccion tipoEnum= new TipoTransaccion();
+            if (tipo == 1)
+            {
+                tipoEnum = TipoTransaccion.Ingreso;
+            }
+            else if (tipo == 2)
+            {
+                tipoEnum = TipoTransaccion.Gasto;
+            }
+         
+            query = query.Where(t => t.Tipo == tipoEnum);
+        }
+
+        if (!string.IsNullOrWhiteSpace(texto))
+        {
+            var textoNormalizado = texto.Trim();
+
+            query = query.Where(t =>
+                t.Descripcion != null &&
+                EF.Functions.Like(t.Descripcion, $"%{textoNormalizado}%"));
+        }
+
+        var total = await query.CountAsync();
+
+        var items = await query
+            .OrderByDescending(t => t.Fecha)
+            .ThenByDescending(t => t.FechaCreacion)
+            .Skip((pagina - 1) * tamanyo)
+            .Take(tamanyo)
+            .Select(t => new TransaccionesUsuarioResponseDto
+            {
+                Id = t.Id,
+                CuentaBancariaId = t.CuentaBancariaId,
+                CategoriaId = t.CategoriaId,
+                Importe = t.Importe,
+                Moneda = t.Moneda,
+                Tipo = (int)t.Tipo,
+                Origen = (int)t.Origen,
+                Proveedor = (int)t.Proveedor,
+                Fecha = t.Fecha,
+                Descripcion = t.Descripcion,
+                IdTransaccionExterna = t.IdTransaccionExterna
+            })
+            .ToListAsync();
+
+        return new PaginacionDTO<TransaccionesUsuarioResponseDto>
+        {
+            Items = items,
+            Total = total,
+            Pagina = pagina,
+            Tamanyo = tamanyo,
+            TotalPaginas = (int)Math.Ceiling(total / (double)tamanyo)
+        };
+    }
+
     public async Task<ResultadoSincronizacionTransaccionesDto> SincronizarDesdeTinkAsync(Guid usuarioId)
     {
         if (usuarioId == Guid.Empty)
@@ -133,5 +225,84 @@ public class TransaccionesService : ITransaccionesService
             scale = 0;
 
         return unscaled / (decimal)Math.Pow(10, scale);
+    }
+    public async Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request)
+    {
+        if (request.UsuarioId == Guid.Empty)
+            throw new ArgumentException("El id del usuario es obligatorio.", nameof(request.UsuarioId));
+
+        if (request.Importe <= 0)
+            throw new ArgumentException("El importe debe ser mayor que cero.", nameof(request.Importe));
+
+        if (request.Tipo != 1 && request.Tipo != 2)
+            throw new ArgumentException("El tipo debe ser 1 (Ingreso) o 2 (Gasto).", nameof(request.Tipo));
+
+        var usuarioExiste = await _context.Usuarios
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == request.UsuarioId);
+
+        if (!usuarioExiste)
+            throw new InvalidOperationException("El usuario indicado no existe.");
+
+        if (request.CuentaBancariaId.HasValue)
+        {
+            var cuentaExiste = await _context.CuentasBancarias
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == request.CuentaBancariaId.Value && c.UsuarioId == request.UsuarioId);
+
+            if (!cuentaExiste)
+                throw new InvalidOperationException("La cuenta indicada no existe o no pertenece al usuario.");
+        }
+
+        if (request.CategoriaId.HasValue)
+        {
+            var categoriaExiste = await _context.Categorias
+                .AsNoTracking()
+                .AnyAsync(c => c.Id == request.CategoriaId.Value);
+
+            if (!categoriaExiste)
+                throw new InvalidOperationException("La categoría indicada no existe.");
+        }
+
+        var tipoEnum = request.Tipo == 1
+            ? TipoTransaccion.Ingreso
+            : TipoTransaccion.Gasto;
+
+        var nueva = new Transaccion
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = request.UsuarioId,
+            CuentaBancariaId = request.CuentaBancariaId,
+            CategoriaId = request.CategoriaId,
+            Importe = Math.Abs(request.Importe),
+            Moneda = string.IsNullOrWhiteSpace(request.Moneda) ? "EUR" : request.Moneda.Trim().ToUpper(),
+            Tipo = tipoEnum,
+            Origen = OrigenTransaccion.Manual,
+            Proveedor = ProveedorTransaccion.Ninguno,
+            Fecha = request.Fecha,
+            Descripcion = string.IsNullOrWhiteSpace(request.Descripcion)
+                ? "Movimiento manual"
+                : request.Descripcion.Trim(),
+            IdTransaccionExterna = null,
+            FechaCreacion = DateTime.UtcNow
+        };
+
+        _context.Transacciones.Add(nueva);
+        await _context.SaveChangesAsync();
+
+        return new TransaccionesUsuarioResponseDto
+        {
+            Id = nueva.Id,
+            CuentaBancariaId = nueva.CuentaBancariaId,
+            CategoriaId = nueva.CategoriaId,
+            Importe = nueva.Importe,
+            Moneda = nueva.Moneda,
+            Tipo = (int)nueva.Tipo,
+            Origen = (int)nueva.Origen,
+            Proveedor = (int)nueva.Proveedor,
+            Fecha = nueva.Fecha,
+            Descripcion = nueva.Descripcion,
+            IdTransaccionExterna = nueva.IdTransaccionExterna
+        };
     }
 }

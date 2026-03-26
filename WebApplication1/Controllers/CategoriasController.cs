@@ -35,7 +35,10 @@ public class CategoriasController : ControllerBase
         });
     }
 
-    [HttpGet]
+
+
+    [HttpGet("obtener")]
+
     public async Task<ActionResult<IEnumerable<Categoria>>> ObtenerTodas()
     {
         var categorias = await _context.Categorias
@@ -58,8 +61,8 @@ public class CategoriasController : ControllerBase
         return Ok(categoria);
     }
 
-    [HttpGet("usuario/{usuarioId}")]
-    public async Task<ActionResult<IEnumerable<Categoria>>> ObtenerPorUsuario(Guid usuarioId)
+    [HttpGet("obtener/{usuarioId}")]
+    public async Task<ActionResult<List<Categoria>>> ObtenerPorUsuario(Guid usuarioId)
     {
         var categorias = await _context.Categorias
             .Where(c => c.EsSistema || c.UsuarioId == usuarioId)

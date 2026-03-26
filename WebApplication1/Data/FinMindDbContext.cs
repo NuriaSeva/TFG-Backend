@@ -216,10 +216,6 @@ public class FinMindDbContext : DbContext
             entity.Property(e => e.Tipo)
                 .HasMaxLength(50);
 
-            // Si añades SaldoActual en la entidad, puedes dejar esto:
-            // entity.Property(e => e.SaldoActual)
-            //     .HasPrecision(18, 2);
-
             entity.HasOne(e => e.Usuario)
                 .WithOne(u => u.CuentaBancaria)
                 .HasForeignKey<CuentaBancaria>(e => e.UsuarioId)

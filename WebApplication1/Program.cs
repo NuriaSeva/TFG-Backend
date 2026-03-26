@@ -51,7 +51,10 @@ if (app.Environment.IsDevelopment())
 }
 app.UseMiddleware<ExceptionMiddleware>();
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 app.MapGet("/", () => "FinMind API funcionando correctamente");
