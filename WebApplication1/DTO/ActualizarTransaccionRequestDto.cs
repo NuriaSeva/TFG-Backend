@@ -1,12 +1,8 @@
-﻿namespace FinMind.DTO;
-
-public class TransaccionesUsuarioResponseDto
+﻿public class ActualizarTransaccionRequestDto
 {
     public Guid Id { get; set; }
-    public Guid UsuarioId  { get; set; }
+    public Guid UsuarioId { get; set; }
     public Guid? CuentaBancariaId { get; set; }
-
-    public string? CategoriaNombre { get; set; }
     public Guid? CategoriaId { get; set; }
     public decimal Importe { get; set; }
     public string Moneda { get; set; } = "EUR";

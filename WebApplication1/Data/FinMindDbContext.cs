@@ -180,8 +180,10 @@ public class FinMindDbContext : DbContext
 
             entity.HasIndex(e => e.UsuarioId);
 
-            entity.HasIndex(e => new { e.UsuarioId, e.Nombre })
+            entity.HasIndex(e => new { e.UsuarioId, e.Nombre, e.Tipo })
                 .IsUnique();
+
+            entity.HasIndex(e => new { e.EsSistema, e.Nombre, e.Tipo });
         });
     }
 
@@ -290,7 +292,7 @@ public class FinMindDbContext : DbContext
 
             entity.HasIndex(e => new { e.UsuarioId, e.Fecha });
 
-            entity.HasIndex(e => new { e.UsuarioId, e.Origen, e.IdTransaccionExterna });
+            entity.HasIndex(e => new { e.UsuarioId, e.Proveedor, e.IdTransaccionExterna });
         });
     }
 }

@@ -83,25 +83,26 @@ public class TransaccionesService : ITransaccionesService
         var total = await query.CountAsync();
 
         var items = await query
-            .OrderByDescending(t => t.Fecha)
-            .ThenByDescending(t => t.FechaCreacion)
-            .Skip((pagina - 1) * tamanyo)
-            .Take(tamanyo)
-            .Select(t => new TransaccionesUsuarioResponseDto
-            {
-                Id = t.Id,
-                CuentaBancariaId = t.CuentaBancariaId,
-                CategoriaId = t.CategoriaId,
-                Importe = t.Importe,
-                Moneda = t.Moneda,
-                Tipo = (int)t.Tipo,
-                Origen = (int)t.Origen,
-                Proveedor = (int)t.Proveedor,
-                Fecha = t.Fecha,
-                Descripcion = t.Descripcion,
-                IdTransaccionExterna = t.IdTransaccionExterna
-            })
-            .ToListAsync();
+         .OrderByDescending(t => t.Fecha)
+         .ThenByDescending(t => t.FechaCreacion)
+         .Skip((pagina - 1) * tamanyo)
+         .Take(tamanyo)
+         .Select(t => new TransaccionesUsuarioResponseDto
+         {
+             Id = t.Id,
+             CuentaBancariaId = t.CuentaBancariaId,
+             CategoriaId = t.CategoriaId,
+             CategoriaNombre = t.Categoria != null ? t.Categoria.Nombre : null,
+             Importe = t.Importe,
+             Moneda = t.Moneda,
+             Tipo = (int)t.Tipo,
+             Origen = (int)t.Origen,
+             Proveedor = (int)t.Proveedor,
+             Fecha = t.Fecha,
+             Descripcion = t.Descripcion,
+             IdTransaccionExterna = t.IdTransaccionExterna
+         })
+         .ToListAsync();
 
         return new PaginacionDTO<TransaccionesUsuarioResponseDto>
         {
@@ -293,6 +294,7 @@ public class TransaccionesService : ITransaccionesService
         return new TransaccionesUsuarioResponseDto
         {
             Id = nueva.Id,
+            UsuarioId= nueva.UsuarioId,
             CuentaBancariaId = nueva.CuentaBancariaId,
             CategoriaId = nueva.CategoriaId,
             Importe = nueva.Importe,

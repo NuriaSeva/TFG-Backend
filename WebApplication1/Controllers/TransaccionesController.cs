@@ -58,7 +58,7 @@ public class TransaccionesController : ControllerBase
     }
 
     [HttpPut("modificar/{id}")]
-    public async Task<IActionResult> Actualizar(Guid id, Transaccion transaccion)
+    public async Task<IActionResult> Actualizar(Guid id, ActualizarTransaccionRequestDto transaccion)
     {
         if (id != transaccion.Id)
             throw new BadRequestException("El id de la URL no coincide con el del cuerpo.");
@@ -71,9 +71,9 @@ public class TransaccionesController : ControllerBase
         if (!usuarioExiste)
             throw new BadRequestException("El usuario indicado no existe.");
 
-        var cuentaExiste = await _context.CuentasBancarias.AnyAsync(c => c.Id == transaccion.CuentaBancariaId);
-        if (!cuentaExiste)
-            throw new BadRequestException("La cuenta indicada no existe.");
+        //var cuentaExiste = await _context.CuentasBancarias.AnyAsync(c => c.Id == transaccion.CuentaBancariaId);
+        //if (!cuentaExiste)
+        //    throw new BadRequestException("La cuenta indicada no existe.");
 
         if (transaccion.CategoriaId.HasValue)
         {
@@ -87,8 +87,8 @@ public class TransaccionesController : ControllerBase
         transaccionActual.CategoriaId = transaccion.CategoriaId;
         transaccionActual.Importe = transaccion.Importe;
         transaccionActual.Moneda = transaccion.Moneda;
-        transaccionActual.Tipo = transaccion.Tipo;
-        transaccionActual.Origen = transaccion.Origen;
+        transaccionActual.Tipo = (TipoTransaccion)transaccion.Tipo;
+        transaccionActual.Origen = (OrigenTransaccion)transaccion.Origen;
         transaccionActual.Fecha = transaccion.Fecha;
         transaccionActual.Descripcion = transaccion.Descripcion;
         transaccionActual.IdTransaccionExterna = transaccion.IdTransaccionExterna;
