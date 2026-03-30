@@ -39,6 +39,7 @@ builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
 builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
 
 builder.Services.AddScoped<ITransaccionesService, TransaccionesService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 var app = builder.Build();
 

@@ -92,12 +92,12 @@ public class BankingController : ControllerBase
 
             await _service.GuardarTokensTransactionsAsync(usuarioId, code);
 
-            return Redirect("findmind://callback?status=transactions-connected");
+            return Redirect("finmind://callback?status=transactions-connected");
         }
         catch (Exception ex)
         {
             return Redirect(
-                "findmind://callback?status=transactions-error&message=" +
+                "finmind://callback?status=transactions-error&message=" +
                 Uri.EscapeDataString(ex.Message));
         }
     }
@@ -107,5 +107,11 @@ public class BankingController : ControllerBase
     {
         var raw = await _service.GetTransactionsRawAsync(usuarioId, cuentaExternaId, idCuenta);
         return Content(raw, "application/json");
+    }
+    [HttpPost("desvincular/{usuarioId:guid}")]
+    public async Task<IActionResult> Desvincular(Guid usuarioId)
+    {
+        await _service.DesvincularCuentaAsync(usuarioId);
+        return Ok(new { mensaje = "Cuenta desvinculada correctamente." });
     }
 }

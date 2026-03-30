@@ -221,11 +221,12 @@ public class TinkBankingService : ITinkBankingService
             conexion.IdConexionExterna = reportId;
             conexion.FechaUltimaSincronizacion = DateTime.UtcNow;
         }
-
         var cuentaExistente = await _context.CuentasBancarias
             .FirstOrDefaultAsync(c =>
                 c.UsuarioId == usuarioId &&
-                c.IdCuentaExterna == account.Id);
+                !string.IsNullOrWhiteSpace(c.Iban) &&
+                !string.IsNullOrWhiteSpace(iban) &&
+                c.Iban == iban);
 
         if (cuentaExistente == null)
         {
@@ -376,11 +377,7 @@ public class TinkBankingService : ITinkBankingService
         var conexion = await _context.ConexionesBancarias
             .FirstOrDefaultAsync(c =>
                 c.UsuarioId == usuarioId &&
-                c.Proveedor == ProveedorBancario.Tink &&
-                c.Estado == EstadoConexionBancaria.Activa);
-
-        if (conexion == null)
-            throw new InvalidOperationException("No existe una conexión bancaria activa para el usuario.");
+                c.Proveedor == ProveedorBancario.Tink);
 
         conexion.AccessToken = accessToken;
         conexion.RefreshToken = refreshToken;
@@ -398,8 +395,7 @@ public class TinkBankingService : ITinkBankingService
         var conexion = await _context.ConexionesBancarias
             .FirstOrDefaultAsync(c =>
                 c.UsuarioId == usuarioId &&
-                c.Proveedor == ProveedorBancario.Tink &&
-                c.Estado == EstadoConexionBancaria.Activa);
+                c.Proveedor == ProveedorBancario.Tink);
 
         if (conexion == null)
             throw new InvalidOperationException("No existe conexión bancaria activa.");
@@ -411,7 +407,18 @@ public class TinkBankingService : ITinkBankingService
         }
 
         if (string.IsNullOrWhiteSpace(conexion.RefreshToken))
-            throw new InvalidOperationException("No hay refresh token. Es necesario volver a autorizar transacciones.");
+        {
+            conexion.Estado = EstadoConexionBancaria.Expirada;
+            conexion.AccessToken = null;
+            conexion.RefreshToken = null;
+            conexion.FechaExpiracionToken = null;
+
+            await _context.SaveChangesAsync();
+
+            throw new InvalidOperationException(
+                "La autorización bancaria ha caducado. Es necesario volver a conectar la cuenta.");
+        }
+
 
         var form = new Dictionary<string, string>
         {
@@ -429,8 +436,15 @@ public class TinkBankingService : ITinkBankingService
 
         if (!response.IsSuccessStatusCode)
         {
+            conexion.Estado = EstadoConexionBancaria.Expirada;
+            conexion.AccessToken = null;
+            conexion.RefreshToken = null;
+            conexion.FechaExpiracionToken = null;
+
+            await _context.SaveChangesAsync();
+
             throw new InvalidOperationException(
-                $"Error al refrescar token de transactions. Status: {(int)response.StatusCode}. Body: {rawJson}");
+                "La autorización bancaria ha caducado. Es necesario volver a conectar la cuenta.");
         }
 
         using var doc = JsonDocument.Parse(rawJson);
@@ -555,4 +569,36 @@ public class TinkBankingService : ITinkBankingService
 
         return rawJson;
     }
+    public async Task DesvincularCuentaAsync(Guid usuarioId)
+    {
+        if (usuarioId == Guid.Empty)
+            throw new ArgumentException("El usuarioId es obligatorio.", nameof(usuarioId));
+
+        var conexion = await _context.ConexionesBancarias
+            .FirstOrDefaultAsync(c =>
+                c.UsuarioId == usuarioId &&
+                c.Proveedor == ProveedorBancario.Tink &&
+               (c.Estado == EstadoConexionBancaria.Activa || c.Estado==EstadoConexionBancaria.Expirada));
+
+        if (conexion == null)
+            throw new InvalidOperationException("No existe una conexión bancaria activa para el usuario.");
+
+        conexion.Estado = EstadoConexionBancaria.Desvinculada;
+        conexion.AccessToken = null;
+        conexion.RefreshToken = null;
+        conexion.FechaExpiracionToken = null;
+        conexion.FechaUltimaSincronizacion = DateTime.UtcNow;
+
+        var cuentas = await _context.CuentasBancarias
+            .Where(c => c.UsuarioId == usuarioId && c.ConexionBancariaId == conexion.Id && c.Activa)
+            .ToListAsync();
+
+        foreach (var cuenta in cuentas)
+        {
+            cuenta.Activa = false;
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
 }

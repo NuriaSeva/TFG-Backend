@@ -119,63 +119,94 @@ public class TransaccionesService : ITransaccionesService
         if (usuarioId == Guid.Empty)
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
+        var conexion = await _context.ConexionesBancarias
+            .FirstOrDefaultAsync(c =>
+                c.UsuarioId == usuarioId &&
+                c.Proveedor == ProveedorBancario.Tink);
+
+        if (conexion == null)
+            throw new InvalidOperationException("No existe una conexión bancaria activa para el usuario.");
+
         var cuenta = await _context.CuentasBancarias
-            .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.Activa);
+            .FirstOrDefaultAsync(c =>
+                c.UsuarioId == usuarioId &&
+                c.Activa &&
+                c.ConexionBancariaId == conexion.Id);
 
         if (cuenta == null)
             throw new InvalidOperationException("No existe una cuenta bancaria activa para el usuario.");
 
-        var transaccionesTink = await _tinkBankingService.GetTransactionsRawAsync(
-            usuarioId,
-            cuenta.IdCuentaExterna,
-            cuenta.Id);
-
-        var options = new JsonSerializerOptions
+        var sincronizacion = new SincronizacionBancaria
         {
-            PropertyNameCaseInsensitive = true
+            Id = Guid.NewGuid(),
+            ConexionBancariaId = conexion.Id,
+            FechaInicio = DateTime.UtcNow,
+            Estado = EstadoSincronizacion.Correcta,
+            NumeroMovimientosImportados = 0
         };
 
-        var transacciones = JsonSerializer
-            .Deserialize<TinkTransactionsResponseDto>(transaccionesTink, options)?
-            .Transactions ?? new List<TinkTransactionDto>();
+        _context.SincronizacionesBancarias.Add(sincronizacion);
+        await _context.SaveChangesAsync();
 
-        var resultado = new ResultadoSincronizacionTransaccionesDto
+        try
         {
-            TotalRecibidas = transacciones.Count,
-            Nuevas = 0,
-            Ignoradas = 0
-        };
+            var transaccionesTink = await _tinkBankingService.GetTransactionsRawAsync(
+                usuarioId,
+                cuenta.IdCuentaExterna,
+                cuenta.Id);
 
-        foreach (var item in transacciones)
-        {
-            if (string.IsNullOrWhiteSpace(item.Id))
+            var options = new JsonSerializerOptions
             {
-                resultado.Ignoradas++;
-                continue;
-            }
+                PropertyNameCaseInsensitive = true
+            };
 
-            var existente = await _context.Transacciones
-                .FirstOrDefaultAsync(t =>
-                    t.UsuarioId == usuarioId &&
-                    t.IdTransaccionExterna == item.Id);
+            var transacciones = JsonSerializer
+                .Deserialize<TinkTransactionsResponseDto>(transaccionesTink, options)?
+                .Transactions ?? new List<TinkTransactionDto>();
 
-            var fecha = ParsearFecha(item.Dates?.Booked);
-            var importeOriginal = ParsearImporte(item.Amount);
-            var moneda = item.Amount?.CurrencyCode ?? cuenta.Moneda ?? "EUR";
-
-            var tipo = importeOriginal >= 0
-                ? TipoTransaccion.Ingreso
-                : TipoTransaccion.Gasto;
-
-            var importe = Math.Abs(importeOriginal);
-
-            var descripcion =
-                item.Descriptions?.Display
-                ?? item.Descriptions?.Original
-                ?? "Movimiento bancario";
-
-            if (existente == null)
+            var resultado = new ResultadoSincronizacionTransaccionesDto
             {
+                TotalRecibidas = transacciones.Count,
+                Nuevas = 0,
+                Ignoradas = 0
+            };
+
+            foreach (var item in transacciones)
+            {
+                if (string.IsNullOrWhiteSpace(item.Id))
+                {
+                    resultado.Ignoradas++;
+                    continue;
+                }
+
+                var existente = await _context.Transacciones
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(t =>
+                        t.UsuarioId == usuarioId &&
+                        t.Proveedor == ProveedorTransaccion.Tink &&
+                        t.IdTransaccionExterna == item.Id);
+
+                if (existente != null)
+                {
+                    resultado.Ignoradas++;
+                    continue;
+                }
+
+                var fecha = ParsearFecha(item.Dates?.Booked);
+                var importeOriginal = ParsearImporte(item.Amount);
+                var moneda = item.Amount?.CurrencyCode ?? cuenta.Moneda ?? "EUR";
+
+                var tipo = importeOriginal >= 0
+                    ? TipoTransaccion.Ingreso
+                    : TipoTransaccion.Gasto;
+
+                var importe = Math.Abs(importeOriginal);
+
+                var descripcion =
+                    item.Descriptions?.Display
+                    ?? item.Descriptions?.Original
+                    ?? "Movimiento bancario";
+
                 var nueva = new Transaccion
                 {
                     Id = Guid.NewGuid(),
@@ -196,11 +227,32 @@ public class TransaccionesService : ITransaccionesService
                 _context.Transacciones.Add(nueva);
                 resultado.Nuevas++;
             }
+
+            var ahora = DateTime.UtcNow;
+
+            cuenta.FechaUltimaSincronizacion = ahora;
+            conexion.FechaUltimaSincronizacion = ahora;
+
+            sincronizacion.FechaFin = ahora;
+            sincronizacion.Estado = EstadoSincronizacion.Correcta;
+            sincronizacion.NumeroMovimientosImportados = resultado.Nuevas;
+            sincronizacion.MensajeError = null;
+
+            await _context.SaveChangesAsync();
+
+            return resultado;
         }
+        catch (Exception ex)
+        {
+            sincronizacion.FechaFin = DateTime.UtcNow;
+            sincronizacion.Estado = EstadoSincronizacion.Error;
+            sincronizacion.MensajeError = ex.Message;
+            sincronizacion.NumeroMovimientosImportados = 0;
 
-        await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync();
 
-        return resultado;
+            throw;
+        }
     }
 
     private static DateTime ParsearFecha(string? fecha)

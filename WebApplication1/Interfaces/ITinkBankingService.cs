@@ -22,4 +22,5 @@ public interface ITinkBankingService
     Task GuardarTokensTransactionsAsync(Guid usuarioId, string code);
     Task<string> ObtenerAccessTokenVigenteAsync(Guid usuarioId);
     Task<string> GetTransactionsRawAsync(Guid usuarioId, string? cuentaExternaId, Guid idCuenta);
+    Task DesvincularCuentaAsync(Guid usuarioId);
 }
