@@ -3,6 +3,7 @@ using FinMind.Data;
 using FinMind.DTO;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,7 +11,7 @@ namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class CategoriasController : ControllerBase
+public class CategoriasController : BaseController
 {
     private readonly FinMindDbContext _context;
     private readonly ICategoriaSeedService _categoriaSeedService;
@@ -35,6 +36,7 @@ public class CategoriasController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize]
     public async Task<ActionResult<CategoriaResponseDto>> ObtenerPorId(Guid id)
     {
         var categoria = await _context.Categorias
@@ -59,9 +61,12 @@ public class CategoriasController : ControllerBase
         return Ok(categoria);
     }
 
-    [HttpGet("obtener/{usuarioId}")]
-    public async Task<ActionResult<List<CategoriaResponseDto>>> ObtenerPorUsuario(Guid usuarioId)
+    [HttpGet("obtener")]
+    [Authorize]
+    public async Task<ActionResult<List<CategoriaResponseDto>>> ObtenerPorUsuario()
     {
+
+        var usuarioId = ObtenerUsuarioId();
         var categorias = await _context.Categorias
             .Where(c => c.EsSistema || c.UsuarioId == usuarioId)
             .OrderBy(c => c.Nombre)
@@ -83,6 +88,7 @@ public class CategoriasController : ControllerBase
     }
 
     [HttpPost("crear")]
+    [Authorize]
     public async Task<ActionResult<CategoriaResponseDto>> Crear(Categoria categoria)
     {
         NormalizarCategoria(categoria);
@@ -112,6 +118,7 @@ public class CategoriasController : ControllerBase
     }
 
     [HttpPut("modificar/{id}")]
+    [Authorize]
     public async Task<IActionResult> Actualizar(Guid id, Categoria categoria)
     {
         if (id != categoria.Id)
@@ -144,6 +151,7 @@ public class CategoriasController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize]
     public async Task<IActionResult> Eliminar(Guid id)
     {
         var categoria = await _context.Categorias.FindAsync(id);

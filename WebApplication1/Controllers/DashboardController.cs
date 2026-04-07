@@ -1,11 +1,12 @@
 ﻿using FinMind.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/dashboard")]
-public class DashboardController : ControllerBase
+public class DashboardController : BaseController
 {
     private readonly IDashboardService _dashboardService;
 
@@ -14,9 +15,11 @@ public class DashboardController : ControllerBase
         _dashboardService = dashboardService;
     }
 
-    [HttpGet("resumen/{usuarioId:guid}")]
-    public async Task<IActionResult> ObtenerResumen(Guid usuarioId)
+    [HttpGet("resumen")]
+    [Authorize]
+    public async Task<IActionResult> ObtenerResumen()
     {
+        var usuarioId = ObtenerUsuarioId();
         var resultado = await _dashboardService.ObtenerResumenMesActualAsync(usuarioId);
         return Ok(resultado);
     }

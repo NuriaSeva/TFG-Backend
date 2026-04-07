@@ -2,8 +2,15 @@ using FinMind.Data;
 using FinMind.Interfaces;
 using FinMind.Middleware;
 using FinMind.Models;
+using FinMind.Models.Enitdades;
 using FinMind.Services;
+using FinMind.Services.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +27,9 @@ builder.Services.AddCors(options =>
             .AllowAnyOrigin();
     });
 });
-
+var jwtOptions = builder.Configuration
+    .GetSection("Jwt")
+    .Get<JwtOptions>() ?? throw new InvalidOperationException("No se ha configurado Jwt");
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                       ?? throw new InvalidOperationException("No se encontró la cadena de conexión");
@@ -41,6 +50,57 @@ builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
 builder.Services.AddScoped<ITransaccionesService, TransaccionesService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
+builder.Services.Configure<JwtOptions>(
+    builder.Configuration.GetSection("Jwt"));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtOptions.Key))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                Console.WriteLine("JWT MESSAGE RECEIVED");
+                Console.WriteLine($"Authorization header: {context.Request.Headers.Authorization}");
+                Console.WriteLine($"Token leído por middleware: {context.Token}");
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                Console.WriteLine("JWT TOKEN VALIDADO");
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine("JWT ERROR:");
+                Console.WriteLine(context.Exception.Message);
+                return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                Console.WriteLine("JWT CHALLENGE:");
+                Console.WriteLine(context.Error);
+                Console.WriteLine(context.ErrorDescription);
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.UseCors(corsPolicy);
@@ -88,6 +148,14 @@ app.MapGet("/health/db", async (FinMindDbContext db) =>
     }
 });
 
+app.Use(async (context, next) =>
+{
+    Console.WriteLine($"REQUEST => {context.Request.Method} {context.Request.Path}{context.Request.QueryString}");
+    await next();
+    Console.WriteLine($"RESPONSE => {context.Response.StatusCode} {context.Request.Path}");
+});
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

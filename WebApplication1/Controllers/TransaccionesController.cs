@@ -11,7 +11,7 @@ namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class TransaccionesController : ControllerBase
+public class TransaccionesController : BaseController
 {
     private readonly FinMindDbContext _context;
 
@@ -112,16 +112,15 @@ public class TransaccionesController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("sincronizar/{usuarioId:guid}")]
-    public async Task<IActionResult> SincronizarDesdeTink(
-    Guid usuarioId)
+    [HttpPost("sincronizar")]
+    public async Task<IActionResult> SincronizarDesdeTink()
     {
+        var usuarioId = ObtenerUsuarioId();
         var resultado = await _transaccionesService.SincronizarDesdeTinkAsync(usuarioId);
         return Ok(resultado);
     }
-    [HttpGet("obtener/{usuarioId:guid}")]
+    [HttpGet("obtener")]
     public async Task<IActionResult> ObtenerPorUsuario(
-       Guid usuarioId,
        [FromQuery] int? mes,
        [FromQuery] int? anio,
        [FromQuery] int? tipo,
@@ -129,6 +128,7 @@ public class TransaccionesController : ControllerBase
        [FromQuery] int pagina = 1,
        [FromQuery] int tamanyo = 20)
     {
+        var usuarioId = ObtenerUsuarioId();
         var resultado = await _transaccionesService.ObtenerPorUsuarioAsync(
             usuarioId,
             mes,

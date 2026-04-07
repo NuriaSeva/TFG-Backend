@@ -1,12 +1,14 @@
-﻿using FinMind.DTO;
+﻿using FinMind.Controllers;
+using FinMind.DTO;
 using FinMind.DTO.Banking;
 using FinMind.Interfaces;
 using FinMind.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/banking/tink")]
-public class BankingController : ControllerBase
+public class BankingController : BaseController
 {
     private readonly ITinkBankingService _service;
 
@@ -16,13 +18,16 @@ public class BankingController : ControllerBase
     }
 
     [HttpGet("login-url")]
-    public async Task<IActionResult> GetLoginUrl([FromQuery] string localUserId)
+    [Authorize]
+    public async Task<IActionResult> GetLoginUrl()
     {
-        var result = await _service.GetLoginUrlAsync(localUserId);
+        var usuarioId = ObtenerUsuarioId().ToString(); ;
+        var result = await _service.GetLoginUrlAsync(usuarioId);
         return Ok(result);
     }
 
     [HttpGet("callback")]
+    [AllowAnonymous]
     public async Task<IActionResult> Callback(
     [FromQuery] string localUserId)
     {
@@ -48,6 +53,7 @@ public class BankingController : ControllerBase
     }
 
     [HttpGet("account-check/last-result")]
+    [Authorize]
     public async Task<IActionResult> GetLastAccountCheckResult([FromQuery] string localUserId)
     {
         var result = await _service.GetLastAccountCheckResultAsync(localUserId);
@@ -59,6 +65,7 @@ public class BankingController : ControllerBase
     }
 
     [HttpGet("account-check/report")]
+    [Authorize]
     public async Task<IActionResult> GetAccountCheckReport([FromQuery] string reportId)
     {
         var result = await _service.GetAccountVerificationReportRawAsync(reportId);
@@ -67,6 +74,7 @@ public class BankingController : ControllerBase
 
 
     [HttpPost("account-check/guardar-cuenta")]
+    [Authorize]
     public async Task<IActionResult> GuardarCuentaDesdeAccountCheck([FromBody] GuardarCuentaDesdeReporteRequestDto request)
     {
         var result = await _service.GuardarCuentaDesdeAccountCheckAsync(
@@ -76,7 +84,9 @@ public class BankingController : ControllerBase
         return Ok(result);
     }
 
+
     [HttpGet("transactions/login-url")]
+    [Authorize]
     public async Task<IActionResult> GetTransactionsLoginUrl([FromQuery] string localUserId)
     {
         var result = await _service.GetTransactionsLoginUrlAsync(localUserId);
@@ -84,6 +94,7 @@ public class BankingController : ControllerBase
     }
 
     [HttpGet("transactions/callback")]
+    [AllowAnonymous]
     public async Task<IActionResult> TransactionsCallback([FromQuery] string localUserId, [FromQuery] string code)
     {
         try
@@ -102,15 +113,19 @@ public class BankingController : ControllerBase
         }
     }
 
-    [HttpGet("transactions/{usuarioId:guid}")]
-    public async Task<IActionResult> GetTransactions([FromQuery] Guid usuarioId, [FromQuery]  string? cuentaExternaId, [FromQuery] Guid idCuenta)
+    [HttpGet("transactions")]
+    [Authorize]
+    public async Task<IActionResult> GetTransactions([FromQuery]  string? cuentaExternaId, [FromQuery] Guid idCuenta)
     {
+        var usuarioId = ObtenerUsuarioId();
         var raw = await _service.GetTransactionsRawAsync(usuarioId, cuentaExternaId, idCuenta);
         return Content(raw, "application/json");
     }
-    [HttpPost("desvincular/{usuarioId:guid}")]
-    public async Task<IActionResult> Desvincular(Guid usuarioId)
+    [HttpPost("desvincular")]
+    [Authorize]
+    public async Task<IActionResult> Desvincular()
     {
+        var usuarioId = ObtenerUsuarioId();
         await _service.DesvincularCuentaAsync(usuarioId);
         return Ok(new { mensaje = "Cuenta desvinculada correctamente." });
     }

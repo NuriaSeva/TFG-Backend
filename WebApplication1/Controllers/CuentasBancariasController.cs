@@ -1,6 +1,7 @@
 ﻿using FinMind.Data;
 using FinMind.DTO;
 using FinMind.Models.Enitdades;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,7 +9,7 @@ namespace FinMind.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class CuentasBancariasController : ControllerBase
+public class CuentasBancariasController : BaseController
 {
     private readonly FinMindDbContext _context;
 
@@ -17,9 +18,11 @@ public class CuentasBancariasController : ControllerBase
         _context = context;
     }
 
-    [HttpGet("usuario/{usuarioId}")]
-    public async Task<ActionResult<CuentaBancaria>> GetCuentaPorUsuario(Guid usuarioId)
+    [HttpGet("usuario")]
+    [Authorize]
+    public async Task<ActionResult<CuentaBancaria>> GetCuentaPorUsuario()
     {
+        var usuarioId = ObtenerUsuarioId();
         var cuenta = await _context.CuentasBancarias
         .Where(c => c.UsuarioId == usuarioId && c.Activa)
         .OrderByDescending(c => c.FechaUltimaSincronizacion)
@@ -43,33 +46,10 @@ public class CuentasBancariasController : ControllerBase
         return Ok(cuenta);
     }
 
-    [HttpPost]
-    public async Task<ActionResult<CuentaBancaria>> CrearCuenta(CuentaBancaria cuenta)
-    {
-        try
-        {
-            var existe = await _context.CuentasBancarias
-                .AnyAsync(c => c.UsuarioId == cuenta.UsuarioId);
 
-            if (existe)
-                return BadRequest("El usuario ya tiene una cuenta bancaria.");
-
-            cuenta.Id = Guid.NewGuid();
-            cuenta.FechaCreacion = DateTime.UtcNow;
-
-            _context.CuentasBancarias.Add(cuenta);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetCuentaPorUsuario),
-                new { usuarioId = cuenta.UsuarioId }, cuenta);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"Error creando cuenta bancaria: {ex.Message}");
-        }
-    }
 
     [HttpPut("{id}")]
+    [Authorize]
     public async Task<IActionResult> ActualizarCuenta(Guid id, CuentaBancaria cuenta)
     {
         try
@@ -101,6 +81,7 @@ public class CuentasBancariasController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize]
     public async Task<IActionResult> EliminarCuenta(Guid id)
     {
         try
