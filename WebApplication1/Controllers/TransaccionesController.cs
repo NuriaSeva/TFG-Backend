@@ -4,6 +4,7 @@ using FinMind.DTO;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
 using FinMind.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +25,7 @@ public class TransaccionesController : BaseController
     }
 
     [HttpGet]
+    [Authorize]
     public async Task<ActionResult<IEnumerable<Transaccion>>> ObtenerTodas()
     {
         var transacciones = await _context.Transacciones
@@ -37,6 +39,7 @@ public class TransaccionesController : BaseController
     }
 
     [HttpGet("{id}")]
+    [Authorize]
     public async Task<ActionResult<Transaccion>> ObtenerPorId(Guid id)
     {
         var transaccion = await _context.Transacciones
@@ -51,6 +54,7 @@ public class TransaccionesController : BaseController
         return Ok(transaccion);
     }
     [HttpPost("crear")]
+    [Authorize]
     public async Task<IActionResult> CrearManual([FromBody] CrearTransaccionManualRequestDto request)
     {
         var resultado = await _transaccionesService.CrearManualAsync(request);
@@ -58,6 +62,7 @@ public class TransaccionesController : BaseController
     }
 
     [HttpPut("modificar/{id}")]
+    [Authorize]
     public async Task<IActionResult> Actualizar(Guid id, ActualizarTransaccionRequestDto transaccion)
     {
         if (id != transaccion.Id)
@@ -99,6 +104,7 @@ public class TransaccionesController : BaseController
     }
 
     [HttpDelete("{id}")]
+    [Authorize]
     public async Task<IActionResult> Eliminar(Guid id)
     {
         var transaccion = await _context.Transacciones.FindAsync(id);
@@ -113,6 +119,7 @@ public class TransaccionesController : BaseController
     }
 
     [HttpPost("sincronizar")]
+    [Authorize]
     public async Task<IActionResult> SincronizarDesdeTink()
     {
         var usuarioId = ObtenerUsuarioId();

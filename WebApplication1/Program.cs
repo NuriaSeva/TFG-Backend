@@ -5,10 +5,11 @@ using FinMind.Models;
 using FinMind.Models.Enitdades;
 using FinMind.Services;
 using FinMind.Services.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Text;
 
 
@@ -55,6 +56,40 @@ builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
 builder.Services.Configure<JwtOptions>(
     builder.Configuration.GetSection("Jwt"));
 
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "FinMind API",
+        Version = "v1"
+    });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Introduce: Bearer {tu token JWT}"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -74,27 +109,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
-                Console.WriteLine("JWT MESSAGE RECEIVED");
-                Console.WriteLine($"Authorization header: {context.Request.Headers.Authorization}");
-                Console.WriteLine($"Token leído por middleware: {context.Token}");
+                Console.WriteLine($"JWT MESSAGE RECEIVED => {context.Request.Method} {context.Request.Path}");
+                Console.WriteLine($"Authorization header => {context.Request.Headers.Authorization}");
                 return Task.CompletedTask;
             },
             OnTokenValidated = context =>
             {
-                Console.WriteLine("JWT TOKEN VALIDADO");
+                Console.WriteLine($"JWT TOKEN VALIDADO => {context.Request.Method} {context.Request.Path}");
                 return Task.CompletedTask;
             },
             OnAuthenticationFailed = context =>
             {
-                Console.WriteLine("JWT ERROR:");
+                Console.WriteLine($"JWT ERROR => {context.Request.Method} {context.Request.Path}");
                 Console.WriteLine(context.Exception.Message);
                 return Task.CompletedTask;
             },
             OnChallenge = context =>
             {
-                Console.WriteLine("JWT CHALLENGE:");
-                Console.WriteLine(context.Error);
-                Console.WriteLine(context.ErrorDescription);
+                Console.WriteLine($"JWT CHALLENGE => {context.Request.Method} {context.Request.Path}");
+                Console.WriteLine($"Error: {context.Error}");
+                Console.WriteLine($"Description: {context.ErrorDescription}");
                 return Task.CompletedTask;
             }
         };
@@ -117,7 +151,6 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-app.UseAuthorization();
 app.MapGet("/", () => "FinMind API funcionando correctamente");
 app.MapGet("/health/db", async (FinMindDbContext db) =>
 {
@@ -148,14 +181,9 @@ app.MapGet("/health/db", async (FinMindDbContext db) =>
     }
 });
 
-app.Use(async (context, next) =>
-{
-    Console.WriteLine($"REQUEST => {context.Request.Method} {context.Request.Path}{context.Request.QueryString}");
-    await next();
-    Console.WriteLine($"RESPONSE => {context.Response.StatusCode} {context.Request.Path}");
-});
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();

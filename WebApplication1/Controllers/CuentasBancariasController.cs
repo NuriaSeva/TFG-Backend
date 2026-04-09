@@ -22,6 +22,7 @@ public class CuentasBancariasController : BaseController
     [Authorize]
     public async Task<ActionResult<CuentaBancaria>> GetCuentaPorUsuario()
     {
+         Console.WriteLine("=== ENTRA CUENTAS /principal ===");
         var usuarioId = ObtenerUsuarioId();
         var cuenta = await _context.CuentasBancarias
         .Where(c => c.UsuarioId == usuarioId && c.Activa)
