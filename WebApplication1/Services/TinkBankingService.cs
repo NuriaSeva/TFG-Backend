@@ -3,6 +3,7 @@ using FinMind.DTO;
 using FinMind.DTO.Banking;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Collections.Generic;
@@ -36,16 +37,25 @@ public class TinkBankingService : ITinkBankingService
     public Task<object> GetLoginUrlAsync(string localUserId)
     {
         var state = Guid.NewGuid().ToString("N");
-        var separator = _options.LinkUrlCuentas.Contains('?') ? "&" : "?";
 
         var callbackUri =
             $"{_options.RedirectUri}?localUserId={Uri.EscapeDataString(localUserId)}";
 
-        var loginUrl =
-            $"{_options.LinkUrlCuentas}" +
-            $"{separator}redirect_uri={Uri.EscapeDataString(callbackUri)}" +
-            $"&state={Uri.EscapeDataString(state)}" +
-            $"&auto_redirect_mobile=true";
+        var queryParams = new Dictionary<string, string?>
+        {
+            ["client_id"] = _options.ClientId,
+            ["redirect_uri"] = callbackUri,
+            ["market"] = _options.Market,
+            ["locale"] = _options.Locale,
+            ["input_provider"] = _options.InputProvider,
+            ["state"] = state,
+            ["auto_redirect_mobile"] = "true"
+        };
+
+        var loginUrl = QueryHelpers.AddQueryString(
+            "https://link.tink.com/1.0/account-check",
+            queryParams
+        );
 
         return Task.FromResult<object>(new
         {
@@ -315,16 +325,25 @@ public class TinkBankingService : ITinkBankingService
     public Task<object> GetTransactionsLoginUrlAsync(string localUserId)
     {
         var state = Guid.NewGuid().ToString("N");
-        var separator = _options.LinkUrlTransacciones.Contains('?') ? "&" : "?";
 
         var callbackUri =
             $"{_options.RedirectUriTransactions}?localUserId={Uri.EscapeDataString(localUserId)}";
 
-        var loginUrl =
-            $"{_options.LinkUrlTransacciones}" +
-            $"{separator}redirect_uri={Uri.EscapeDataString(callbackUri)}" +
-            $"&state={Uri.EscapeDataString(state)}" +
-            $"&auto_redirect_mobile=true";
+        var queryParams = new Dictionary<string, string?>
+        {
+            ["client_id"] = _options.ClientId,
+            ["redirect_uri"] = callbackUri,
+            ["market"] = _options.Market,
+            ["locale"] = _options.Locale,
+            ["input_provider"] = _options.InputProvider,
+            ["state"] = state,
+            ["auto_redirect_mobile"] = "true"
+        };
+
+        var loginUrl = QueryHelpers.AddQueryString(
+            "https://link.tink.com/1.0/transactions/connect-accounts",
+            queryParams
+        );
 
         return Task.FromResult<object>(new
         {
