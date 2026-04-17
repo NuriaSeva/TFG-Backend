@@ -6,4 +6,6 @@
     public string Market { get; set; } = "ES";
     public string Locale { get; set; } = "es_ES";
     public string InputProvider { get; set; } = "es-demobank-password";
+    public object BaseUrl { get; set; } = string.Empty;
+    public string ClientSecret { get; set; } = string.Empty;
 }
