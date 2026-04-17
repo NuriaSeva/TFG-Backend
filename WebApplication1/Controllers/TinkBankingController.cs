@@ -54,9 +54,10 @@ public class BankingController : BaseController
 
     [HttpGet("account-check/last-result")]
     [Authorize]
-    public async Task<IActionResult> GetLastAccountCheckResult([FromQuery] string localUserId)
+    public async Task<IActionResult> GetLastAccountCheckResult()
     {
-        var result = await _service.GetLastAccountCheckResultAsync(localUserId);
+        var usuarioId = ObtenerUsuarioId().ToString(); ;
+        var result = await _service.GetLastAccountCheckResultAsync(usuarioId);
 
         if (result == null)
             return NotFound(new { message = "No hay resultado de Account Check para ese usuario." });
@@ -87,9 +88,9 @@ public class BankingController : BaseController
 
     [HttpGet("transactions/login-url")]
     [Authorize]
-    public async Task<IActionResult> GetTransactionsLoginUrl([FromQuery] string localUserId)
-    {
-        var result = await _service.GetTransactionsLoginUrlAsync(localUserId);
+    public async Task<IActionResult> GetTransactionsLoginUrl() {
+        var usuarioId = ObtenerUsuarioId().ToString();
+        var result = await _service.GetTransactionsLoginUrlAsync(usuarioId);
         return Ok(result);
     }
 

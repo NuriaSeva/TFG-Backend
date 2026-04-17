@@ -1,4 +1,4 @@
-﻿using FinMind.Common.Exceptions;
+using FinMind.Common.Exceptions;
 using FinMind.Data;
 using FinMind.DTO;
 using FinMind.Interfaces;
@@ -15,7 +15,6 @@ namespace FinMind.Controllers;
 public class TransaccionesController : BaseController
 {
     private readonly FinMindDbContext _context;
-
     private readonly ITransaccionesService _transaccionesService;
 
     public TransaccionesController(FinMindDbContext context, ITransaccionesService transaccionesService)
@@ -53,6 +52,7 @@ public class TransaccionesController : BaseController
 
         return Ok(transaccion);
     }
+
     [HttpPost("crear")]
     [Authorize]
     public async Task<IActionResult> CrearManual([FromBody] CrearTransaccionManualRequestDto request)
@@ -75,10 +75,6 @@ public class TransaccionesController : BaseController
         var usuarioExiste = await _context.Usuarios.AnyAsync(u => u.Id == transaccion.UsuarioId);
         if (!usuarioExiste)
             throw new BadRequestException("El usuario indicado no existe.");
-
-        //var cuentaExiste = await _context.CuentasBancarias.AnyAsync(c => c.Id == transaccion.CuentaBancariaId);
-        //if (!cuentaExiste)
-        //    throw new BadRequestException("La cuenta indicada no existe.");
 
         if (transaccion.CategoriaId.HasValue)
         {
@@ -126,14 +122,16 @@ public class TransaccionesController : BaseController
         var resultado = await _transaccionesService.SincronizarDesdeTinkAsync(usuarioId);
         return Ok(resultado);
     }
+
     [HttpGet("obtener")]
+    [Authorize]
     public async Task<IActionResult> ObtenerPorUsuario(
-       [FromQuery] int? mes,
-       [FromQuery] int? anio,
-       [FromQuery] int? tipo,
-       [FromQuery] string? texto,
-       [FromQuery] int pagina = 1,
-       [FromQuery] int tamanyo = 20)
+        [FromQuery] int? mes,
+        [FromQuery] int? anio,
+        [FromQuery] int? tipo,
+        [FromQuery] string? texto,
+        [FromQuery] int pagina = 1,
+        [FromQuery] int tamanyo = 20)
     {
         var usuarioId = ObtenerUsuarioId();
         var resultado = await _transaccionesService.ObtenerPorUsuarioAsync(
@@ -146,5 +144,29 @@ public class TransaccionesController : BaseController
             tamanyo);
 
         return Ok(resultado);
+    }
+
+    [HttpGet("exportar-csv")]
+    [Authorize]
+    public async Task<IActionResult> ExportarCsv(
+        [FromQuery] int? mes,
+        [FromQuery] int? anio,
+        [FromQuery] int? tipo,
+        [FromQuery] string? texto,
+        [FromQuery] bool exportarTodo = false)
+    {
+        var usuarioId = ObtenerUsuarioId();
+        var archivo = await _transaccionesService.ExportarCsvAsync(
+            usuarioId,
+            mes,
+            anio,
+            tipo,
+            texto,
+            exportarTodo);
+
+        var sufijo = exportarTodo ? "todos" : "filtrados";
+        var nombreArchivo = $"movimientos_{sufijo}_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+
+        return File(archivo, "text/csv; charset=utf-8", nombreArchivo);
     }
 }

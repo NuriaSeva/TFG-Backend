@@ -3,6 +3,7 @@ using FinMind.DTO.Dashboard;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace FinMind.Services;
 
@@ -15,13 +16,14 @@ public class DashboardService : IDashboardService
         _context = context;
     }
 
-    public async Task<DashboardResumenDto> ObtenerResumenMesActualAsync(Guid usuarioId)
+    public async Task<DashboardResumenDto> ObtenerResumenMesActualAsync(Guid usuarioId, int? mes = null, int? anio = null)
     {
         if (usuarioId == Guid.Empty)
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
-        var hoy = DateTime.Today;
-        var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+        var (anioFiltro, mesFiltro) = ResolverPeriodo(mes, anio);
+
+        var inicioMes = new DateTime(anioFiltro, mesFiltro, 1);
         var inicioMesSiguiente = inicioMes.AddMonths(1);
 
         var query = _context.Transacciones
@@ -56,16 +58,17 @@ public class DashboardService : IDashboardService
         };
     }
 
-    public async Task<DashboardVisualizacionesDto> ObtenerVisualizacionesAsync(Guid usuarioId)
+    public async Task<DashboardVisualizacionesDto> ObtenerVisualizacionesAsync(Guid usuarioId, int? mes = null, int? anio = null)
     {
         if (usuarioId == Guid.Empty)
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
-        var hoy = DateTime.Today;
-        var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+        var (anioFiltro, mesFiltro) = ResolverPeriodo(mes, anio);
+
+        var inicioMes = new DateTime(anioFiltro, mesFiltro, 1);
         var inicioMesSiguiente = inicioMes.AddMonths(1);
 
-        var resumen = await ObtenerResumenMesActualAsync(usuarioId);
+        var resumen = await ObtenerResumenMesActualAsync(usuarioId, mesFiltro, anioFiltro);
 
         var gastosPorCategoriaRaw = await (
             from t in _context.Transacciones.AsNoTracking()
@@ -96,7 +99,7 @@ public class DashboardService : IDashboardService
             })
             .ToList();
 
-        var inicioRango = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-5);
+        var inicioRango = inicioMes.AddMonths(-5);
         var finRango = inicioMesSiguiente;
 
         var movimientosMensuales = await _context.Transacciones
@@ -137,7 +140,7 @@ public class DashboardService : IDashboardService
             {
                 Anio = fecha.Year,
                 Mes = fecha.Month,
-                Etiqueta = fecha.ToString("MMM yy", new System.Globalization.CultureInfo("es-ES")),
+                Etiqueta = fecha.ToString("MMM yy", new CultureInfo("es-ES")),
                 Gastos = gastos,
                 Ingresos = ingresos
             });
@@ -151,14 +154,14 @@ public class DashboardService : IDashboardService
         };
     }
 
-
-    public async Task<DashboardMapaCalorDto> ObtenerMapaCalorMesActualAsync(Guid usuarioId)
+    public async Task<DashboardMapaCalorDto> ObtenerMapaCalorMesActualAsync(Guid usuarioId, int? mes = null, int? anio = null)
     {
         if (usuarioId == Guid.Empty)
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
-        var hoy = DateTime.Today;
-        var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+        var (anioFiltro, mesFiltro) = ResolverPeriodo(mes, anio);
+
+        var inicioMes = new DateTime(anioFiltro, mesFiltro, 1);
         var inicioMesSiguiente = inicioMes.AddMonths(1);
 
         var gastosPorDia = await _context.Transacciones
@@ -198,10 +201,26 @@ public class DashboardService : IDashboardService
 
         return new DashboardMapaCalorDto
         {
-            Anio = hoy.Year,
-            Mes = hoy.Month,
+            Anio = anioFiltro,
+            Mes = mesFiltro,
             MaximoGastoDia = dias.Count == 0 ? 0 : dias.Max(x => x.TotalGasto),
             Dias = dias
         };
+    }
+
+    private static (int anio, int mes) ResolverPeriodo(int? mes, int? anio)
+    {
+        var hoy = DateTime.Today;
+
+        var mesFinal = mes ?? hoy.Month;
+        var anioFinal = anio ?? hoy.Year;
+
+        if (mesFinal < 1 || mesFinal > 12)
+            throw new ArgumentOutOfRangeException(nameof(mes), "El mes debe estar entre 1 y 12.");
+
+        if (anioFinal < 2000 || anioFinal > 2100)
+            throw new ArgumentOutOfRangeException(nameof(anio), "El año no es válido.");
+
+        return (anioFinal, mesFinal);
     }
 }

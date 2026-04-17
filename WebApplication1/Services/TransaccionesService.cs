@@ -1,9 +1,11 @@
-﻿using FinMind.Data;
+using FinMind.Data;
 using FinMind.DTO;
 using FinMind.DTO.Banking;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 namespace FinMind.Services;
@@ -22,13 +24,13 @@ public class TransaccionesService : ITransaccionesService
     }
 
     public async Task<PaginacionDTO<TransaccionesUsuarioResponseDto>> ObtenerPorUsuarioAsync(
-    Guid usuarioId,
-    int? mes = null,
-    int? anio = null,
-    int? tipo = null,
-    string? texto = null,
-    int pagina = 1,
-    int tamanyo = 20)
+        Guid usuarioId,
+        int? mes = null,
+        int? anio = null,
+        int? tipo = null,
+        string? texto = null,
+        int pagina = 1,
+        int tamanyo = 20)
     {
         if (usuarioId == Guid.Empty)
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
@@ -42,67 +44,31 @@ public class TransaccionesService : ITransaccionesService
         if (tamanyo > 100)
             tamanyo = 100;
 
-        var query = _context.Transacciones
-            .AsNoTracking()
-            .Where(t => t.UsuarioId == usuarioId);
-
-        if (anio.HasValue)
-        {
-            query = query.Where(t => t.Fecha.Year == anio.Value);
-        }
-
-        if (mes.HasValue)
-        {
-            query = query.Where(t => t.Fecha.Month == mes.Value);
-        }
-
-        if (tipo.HasValue)
-        {
-            TipoTransaccion tipoEnum= new TipoTransaccion();
-            if (tipo == 1)
-            {
-                tipoEnum = TipoTransaccion.Ingreso;
-            }
-            else if (tipo == 2)
-            {
-                tipoEnum = TipoTransaccion.Gasto;
-            }
-         
-            query = query.Where(t => t.Tipo == tipoEnum);
-        }
-
-        if (!string.IsNullOrWhiteSpace(texto))
-        {
-            var textoNormalizado = texto.Trim();
-
-            query = query.Where(t =>
-                t.Descripcion != null &&
-                EF.Functions.Like(t.Descripcion, $"%{textoNormalizado}%"));
-        }
+        var query = ConstruirConsultaUsuario(usuarioId, mes, anio, tipo, texto, exportarTodo: false);
 
         var total = await query.CountAsync();
 
         var items = await query
-         .OrderByDescending(t => t.Fecha)
-         .ThenByDescending(t => t.FechaCreacion)
-         .Skip((pagina - 1) * tamanyo)
-         .Take(tamanyo)
-         .Select(t => new TransaccionesUsuarioResponseDto
-         {
-             Id = t.Id,
-             CuentaBancariaId = t.CuentaBancariaId,
-             CategoriaId = t.CategoriaId,
-             CategoriaNombre = t.Categoria != null ? t.Categoria.Nombre : null,
-             Importe = t.Importe,
-             Moneda = t.Moneda,
-             Tipo = (int)t.Tipo,
-             Origen = (int)t.Origen,
-             Proveedor = (int)t.Proveedor,
-             Fecha = t.Fecha,
-             Descripcion = t.Descripcion,
-             IdTransaccionExterna = t.IdTransaccionExterna
-         })
-         .ToListAsync();
+            .OrderByDescending(t => t.Fecha)
+            .ThenByDescending(t => t.FechaCreacion)
+            .Skip((pagina - 1) * tamanyo)
+            .Take(tamanyo)
+            .Select(t => new TransaccionesUsuarioResponseDto
+            {
+                Id = t.Id,
+                CuentaBancariaId = t.CuentaBancariaId,
+                CategoriaId = t.CategoriaId,
+                CategoriaNombre = t.Categoria != null ? t.Categoria.Nombre : null,
+                Importe = t.Importe,
+                Moneda = t.Moneda,
+                Tipo = (int)t.Tipo,
+                Origen = (int)t.Origen,
+                Proveedor = (int)t.Proveedor,
+                Fecha = t.Fecha,
+                Descripcion = t.Descripcion,
+                IdTransaccionExterna = t.IdTransaccionExterna
+            })
+            .ToListAsync();
 
         return new PaginacionDTO<TransaccionesUsuarioResponseDto>
         {
@@ -112,6 +78,70 @@ public class TransaccionesService : ITransaccionesService
             Tamanyo = tamanyo,
             TotalPaginas = (int)Math.Ceiling(total / (double)tamanyo)
         };
+    }
+
+    public async Task<byte[]> ExportarCsvAsync(
+        Guid usuarioId,
+        int? mes = null,
+        int? anio = null,
+        int? tipo = null,
+        string? texto = null,
+        bool exportarTodo = false)
+    {
+        if (usuarioId == Guid.Empty)
+            throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
+
+        var culture = CultureInfo.GetCultureInfo("es-ES");
+
+        var items = await ConstruirConsultaUsuario(usuarioId, mes, anio, tipo, texto, exportarTodo)
+            .OrderByDescending(t => t.Fecha)
+            .ThenByDescending(t => t.FechaCreacion)
+            .Select(t => new
+            {
+                t.Fecha,
+                t.Descripcion,
+                Categoria = t.Categoria != null ? t.Categoria.Nombre : null,
+                t.Tipo,
+                t.Importe,
+                t.Moneda,
+                t.Origen,
+                Cuenta = t.CuentaBancaria != null ? t.CuentaBancaria.Nombre : null,
+                Banco = t.CuentaBancaria != null ? t.CuentaBancaria.Banco : null
+            })
+            .ToListAsync();
+
+        var csv = new StringBuilder();
+        csv.Append('﻿');
+        csv.AppendLine("sep=;");
+        csv.AppendLine("Fecha;Descripción;Categoría;Tipo;Importe;Moneda;Origen;Cuenta;Banco");
+
+        foreach (var item in items)
+        {
+            var importeConSigno = item.Tipo == TipoTransaccion.Gasto
+                ? -item.Importe
+                : item.Importe;
+
+            csv.Append(EscaparCsv(item.Fecha.ToString("dd/MM/yyyy", culture)));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Descripcion ?? string.Empty));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Categoria ?? "Sin categoría"));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Tipo == TipoTransaccion.Ingreso ? "Ingreso" : "Gasto"));
+            csv.Append(';');
+            csv.Append(EscaparCsv(importeConSigno.ToString("N2", culture)));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Moneda ?? "EUR"));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Origen == OrigenTransaccion.Manual ? "Manual" : "Banco"));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Cuenta ?? string.Empty));
+            csv.Append(';');
+            csv.Append(EscaparCsv(item.Banco ?? string.Empty));
+            csv.AppendLine();
+        }
+
+        return Encoding.UTF8.GetBytes(csv.ToString());
     }
 
     public async Task<ResultadoSincronizacionTransaccionesDto> SincronizarDesdeTinkAsync(Guid usuarioId)
@@ -255,6 +285,71 @@ public class TransaccionesService : ITransaccionesService
         }
     }
 
+    private IQueryable<Transaccion> ConstruirConsultaUsuario(
+        Guid usuarioId,
+        int? mes,
+        int? anio,
+        int? tipo,
+        string? texto,
+        bool exportarTodo)
+    {
+        var query = _context.Transacciones
+            .AsNoTracking()
+            .Where(t => t.UsuarioId == usuarioId);
+
+        if (exportarTodo)
+            return query;
+
+        if (anio.HasValue)
+        {
+            query = query.Where(t => t.Fecha.Year == anio.Value);
+        }
+
+        if (mes.HasValue)
+        {
+            query = query.Where(t => t.Fecha.Month == mes.Value);
+        }
+
+        if (tipo.HasValue && (tipo == 1 || tipo == 2))
+        {
+            var tipoEnum = tipo == 1
+                ? TipoTransaccion.Ingreso
+                : TipoTransaccion.Gasto;
+
+            query = query.Where(t => t.Tipo == tipoEnum);
+        }
+
+        if (!string.IsNullOrWhiteSpace(texto))
+        {
+            var textoNormalizado = texto.Trim();
+
+            query = query.Where(t =>
+                t.Descripcion != null &&
+                EF.Functions.Like(t.Descripcion, $"%{textoNormalizado}%"));
+        }
+
+        return query;
+    }
+
+    private static string EscaparCsv(string? valor)
+    {
+        if (string.IsNullOrEmpty(valor))
+            return string.Empty;
+
+        var valorNormalizado = valor
+            .Replace("\r\n", " ")
+            .Replace("\n", " ")
+            .Replace("\r", " ");
+
+        if (valorNormalizado.Contains(';') || valorNormalizado.Contains('"'))
+        {
+            valorNormalizado = valorNormalizado.Replace("\"", "\"\"");
+            return $"\"{valorNormalizado}\"";
+        }
+
+        return valorNormalizado;
+    }
+
     private static DateTime ParsearFecha(string? fecha)
     {
         if (string.IsNullOrWhiteSpace(fecha))
@@ -279,6 +374,7 @@ public class TransaccionesService : ITransaccionesService
 
         return unscaled / (decimal)Math.Pow(10, scale);
     }
+
     public async Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request)
     {
         if (request.UsuarioId == Guid.Empty)
@@ -346,7 +442,7 @@ public class TransaccionesService : ITransaccionesService
         return new TransaccionesUsuarioResponseDto
         {
             Id = nueva.Id,
-            UsuarioId= nueva.UsuarioId,
+            UsuarioId = nueva.UsuarioId,
             CuentaBancariaId = nueva.CuentaBancariaId,
             CategoriaId = nueva.CategoriaId,
             Importe = nueva.Importe,

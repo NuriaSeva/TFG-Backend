@@ -17,28 +17,28 @@ public class DashboardController : BaseController
 
     [HttpGet("resumen")]
     [Authorize]
-    public async Task<IActionResult> ObtenerResumen()
+    public async Task<IActionResult> ObtenerResumen([FromQuery] int? mes = null, [FromQuery] int? anio = null)
     {
         var usuarioId = ObtenerUsuarioId();
-        var resultado = await _dashboardService.ObtenerResumenMesActualAsync(usuarioId);
+        var resultado = await _dashboardService.ObtenerResumenMesActualAsync(usuarioId, mes, anio);
         return Ok(resultado);
     }
 
     [HttpGet("visualizaciones")]
     [Authorize]
-    public async Task<IActionResult> ObtenerVisualizaciones()
+    public async Task<IActionResult> ObtenerVisualizaciones([FromQuery] int? mes = null, [FromQuery] int? anio = null)
     {
         var usuarioId = ObtenerUsuarioId();
-        var resultado = await _dashboardService.ObtenerVisualizacionesAsync(usuarioId);
+        var resultado = await _dashboardService.ObtenerVisualizacionesAsync(usuarioId, mes, anio);
         return Ok(resultado);
     }
 
     [HttpGet("mapa-calor")]
     [Authorize]
-    public async Task<IActionResult> ObtenerMapaCalor()
+    public async Task<IActionResult> ObtenerMapaCalor([FromQuery] int? mes = null, [FromQuery] int? anio = null)
     {
         var usuarioId = ObtenerUsuarioId();
-        var resultado = await _dashboardService.ObtenerMapaCalorMesActualAsync(usuarioId);
+        var resultado = await _dashboardService.ObtenerMapaCalorMesActualAsync(usuarioId, mes, anio);
         return Ok(resultado);
     }
 }

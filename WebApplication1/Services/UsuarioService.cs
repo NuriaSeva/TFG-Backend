@@ -1,7 +1,6 @@
 ﻿using FinMind.Data;
 using FinMind.DTO.Autenticacion;
 using FinMind.Models;
-
 using FinMind.Models.Enitdades;
 using FinMind.Services.Interfaces;
 using Microsoft.AspNetCore.Identity;
@@ -32,6 +31,8 @@ public class UsuarioService : IUsuarioService
 
     public async Task<AutenticacionResponseDto> RegistrarAsync(RegistroUsuarioDto dto)
     {
+        ValidarPasswordSegura(dto.Password);
+
         var emailNormalizado = dto.Email.Trim().ToLowerInvariant();
 
         var existeUsuario = await _context.Usuarios
@@ -51,7 +52,8 @@ public class UsuarioService : IUsuarioService
             MonedaPreferida = "EUR",
             Idioma = "es",
             Activo = true,
-            FechaCreacion = DateTime.UtcNow
+            FechaCreacion = DateTime.UtcNow,
+            FechaCambioPassword = DateTime.UtcNow
         };
 
         usuario.PasswordHash = _passwordHasher.HashPassword(usuario, dto.Password);
@@ -92,6 +94,78 @@ public class UsuarioService : IUsuarioService
         return GenerarRespuestaAutenticacion(usuario);
     }
 
+    public async Task CambiarPasswordAsync(Guid usuarioId, CambiarPasswordDto dto)
+    {
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == usuarioId);
+
+        if (usuario is null)
+        {
+            throw new UnauthorizedAccessException("No se ha encontrado el usuario autenticado.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.PasswordActual))
+        {
+            throw new InvalidOperationException("Debes indicar la contraseña actual.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.PasswordNueva))
+        {
+            throw new InvalidOperationException("Debes indicar la nueva contraseña.");
+        }
+
+        var resultadoPasswordActual = _passwordHasher.VerifyHashedPassword(usuario, usuario.PasswordHash, dto.PasswordActual);
+
+        if (resultadoPasswordActual == PasswordVerificationResult.Failed)
+        {
+            throw new UnauthorizedAccessException("La contraseña actual no es correcta.");
+        }
+
+        var nuevaEsIgualActual = _passwordHasher.VerifyHashedPassword(usuario, usuario.PasswordHash, dto.PasswordNueva);
+        if (nuevaEsIgualActual != PasswordVerificationResult.Failed)
+        {
+            throw new InvalidOperationException("La nueva contraseña no puede ser igual a la actual.");
+        }
+
+        ValidarPasswordSegura(dto.PasswordNueva);
+
+        usuario.PasswordHash = _passwordHasher.HashPassword(usuario, dto.PasswordNueva);
+        usuario.FechaCambioPassword = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+    }
+
+    private static void ValidarPasswordSegura(string password)
+    {
+        var errores = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            errores.Add("La contraseña es obligatoria.");
+        }
+        else
+        {
+            if (password.Length < 8)
+                errores.Add("Debe tener al menos 8 caracteres.");
+
+            if (!password.Any(char.IsUpper))
+                errores.Add("Debe incluir al menos una letra mayúscula.");
+
+            if (!password.Any(char.IsLower))
+                errores.Add("Debe incluir al menos una letra minúscula.");
+
+            if (!password.Any(char.IsDigit))
+                errores.Add("Debe incluir al menos un número.");
+
+            if (!password.Any(c => !char.IsLetterOrDigit(c)))
+                errores.Add("Debe incluir al menos un carácter especial.");
+        }
+
+        if (errores.Count > 0)
+        {
+            throw new InvalidOperationException("La contraseña no cumple los requisitos de seguridad: " + string.Join(" ", errores));
+        }
+    }
+
     private AutenticacionResponseDto GenerarRespuestaAutenticacion(Usuario usuario)
     {
         var expiracion = DateTime.UtcNow.AddMinutes(_jwtOptions.ExpirationMinutes);
@@ -110,6 +184,7 @@ public class UsuarioService : IUsuarioService
         {
             throw new InvalidOperationException("La audience JWT no está configurada.");
         }
+
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),

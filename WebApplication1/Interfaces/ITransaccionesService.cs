@@ -1,4 +1,4 @@
-﻿using FinMind.DTO;
+using FinMind.DTO;
 using FinMind.Models.Enitdades;
 
 namespace FinMind.Interfaces
@@ -16,6 +16,14 @@ namespace FinMind.Interfaces
             int pagina = 1,
             int tamanyoPagina = 20);
 
+        Task<byte[]> ExportarCsvAsync(
+            Guid usuarioId,
+            int? mes = null,
+            int? anio = null,
+            int? tipo = null,
+            string? texto = null,
+            bool exportarTodo = false);
+
         Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request);
-    } }
-    
+    }
+}
