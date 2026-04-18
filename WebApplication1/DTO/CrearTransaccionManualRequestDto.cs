@@ -2,7 +2,6 @@
 {
     public class CrearTransaccionManualRequestDto
     {
-        public Guid UsuarioId { get; set; }
         public Guid? CuentaBancariaId { get; set; }
         public Guid? CategoriaId { get; set; }
         public decimal Importe { get; set; }

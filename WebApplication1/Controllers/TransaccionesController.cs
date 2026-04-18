@@ -57,7 +57,8 @@ public class TransaccionesController : BaseController
     [Authorize]
     public async Task<IActionResult> CrearManual([FromBody] CrearTransaccionManualRequestDto request)
     {
-        var resultado = await _transaccionesService.CrearManualAsync(request);
+        var usuarioId =ObtenerUsuarioId();
+        var resultado = await _transaccionesService.CrearManualAsync(request, usuarioId);
         return Ok(resultado);
     }
 
@@ -72,18 +73,15 @@ public class TransaccionesController : BaseController
         if (transaccionActual == null)
             throw new NotFoundException("No se ha encontrado la transacción.");
 
-        var usuarioExiste = await _context.Usuarios.AnyAsync(u => u.Id == transaccion.UsuarioId);
-        if (!usuarioExiste)
-            throw new BadRequestException("El usuario indicado no existe.");
-
         if (transaccion.CategoriaId.HasValue)
         {
             var categoriaExiste = await _context.Categorias.AnyAsync(c => c.Id == transaccion.CategoriaId.Value);
             if (!categoriaExiste)
                 throw new BadRequestException("La categoría indicada no existe.");
         }
+        var usuarioId = ObtenerUsuarioId();
 
-        transaccionActual.UsuarioId = transaccion.UsuarioId;
+        transaccionActual.UsuarioId = usuarioId;
         transaccionActual.CuentaBancariaId = transaccion.CuentaBancariaId;
         transaccionActual.CategoriaId = transaccion.CategoriaId;
         transaccionActual.Importe = transaccion.Importe;

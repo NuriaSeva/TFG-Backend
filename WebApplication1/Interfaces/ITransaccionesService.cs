@@ -24,6 +24,6 @@ namespace FinMind.Interfaces
             string? texto = null,
             bool exportarTodo = false);
 
-        Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request);
+        Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request, Guid usuarioId);
     }
 }

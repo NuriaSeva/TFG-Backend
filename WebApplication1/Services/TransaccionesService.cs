@@ -375,10 +375,10 @@ public class TransaccionesService : ITransaccionesService
         return unscaled / (decimal)Math.Pow(10, scale);
     }
 
-    public async Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request)
+    public async Task<TransaccionesUsuarioResponseDto> CrearManualAsync(CrearTransaccionManualRequestDto request, Guid usuarioId)
     {
-        if (request.UsuarioId == Guid.Empty)
-            throw new ArgumentException("El id del usuario es obligatorio.", nameof(request.UsuarioId));
+        if (usuarioId == Guid.Empty)
+            throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
         if (request.Importe <= 0)
             throw new ArgumentException("El importe debe ser mayor que cero.", nameof(request.Importe));
@@ -388,7 +388,7 @@ public class TransaccionesService : ITransaccionesService
 
         var usuarioExiste = await _context.Usuarios
             .AsNoTracking()
-            .AnyAsync(u => u.Id == request.UsuarioId);
+            .AnyAsync(u => u.Id == usuarioId);
 
         if (!usuarioExiste)
             throw new InvalidOperationException("El usuario indicado no existe.");
@@ -397,7 +397,7 @@ public class TransaccionesService : ITransaccionesService
         {
             var cuentaExiste = await _context.CuentasBancarias
                 .AsNoTracking()
-                .AnyAsync(c => c.Id == request.CuentaBancariaId.Value && c.UsuarioId == request.UsuarioId);
+                .AnyAsync(c => c.Id == request.CuentaBancariaId.Value && c.UsuarioId == usuarioId);
 
             if (!cuentaExiste)
                 throw new InvalidOperationException("La cuenta indicada no existe o no pertenece al usuario.");
@@ -420,7 +420,7 @@ public class TransaccionesService : ITransaccionesService
         var nueva = new Transaccion
         {
             Id = Guid.NewGuid(),
-            UsuarioId = request.UsuarioId,
+            UsuarioId = usuarioId,
             CuentaBancariaId = request.CuentaBancariaId,
             CategoriaId = request.CategoriaId,
             Importe = Math.Abs(request.Importe),

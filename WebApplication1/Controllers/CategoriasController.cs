@@ -91,6 +91,7 @@ public class CategoriasController : BaseController
     [Authorize]
     public async Task<ActionResult<CategoriaResponseDto>> Crear(Categoria categoria)
     {
+        categoria.UsuarioId = ObtenerUsuarioId();
         NormalizarCategoria(categoria);
 
         await ValidarCategoriaAsync(categoria);
