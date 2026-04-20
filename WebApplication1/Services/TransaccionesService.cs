@@ -1,6 +1,7 @@
 using FinMind.Data;
 using FinMind.DTO;
 using FinMind.DTO.Banking;
+using FinMind.DTO.IA;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
@@ -14,13 +15,16 @@ public class TransaccionesService : ITransaccionesService
 {
     private readonly FinMindDbContext _context;
     private readonly ITinkBankingService _tinkBankingService;
+    private readonly IIAFinanzasService _iaFinanzasService;
 
     public TransaccionesService(
         FinMindDbContext context,
-        ITinkBankingService tinkBankingService)
+        ITinkBankingService tinkBankingService,
+        IIAFinanzasService iaFinanzasService)
     {
         _context = context;
         _tinkBankingService = tinkBankingService;
+        _iaFinanzasService = iaFinanzasService;
     }
 
     public async Task<PaginacionDTO<TransaccionesUsuarioResponseDto>> ObtenerPorUsuarioAsync(
@@ -254,6 +258,8 @@ public class TransaccionesService : ITransaccionesService
                     FechaCreacion = DateTime.UtcNow
                 };
 
+                await IntentarAutocategorizarAsync(nueva, usuarioId);
+
                 _context.Transacciones.Add(nueva);
                 resultado.Nuevas++;
             }
@@ -436,6 +442,8 @@ public class TransaccionesService : ITransaccionesService
             FechaCreacion = DateTime.UtcNow
         };
 
+        await IntentarAutocategorizarAsync(nueva, usuarioId);
+
         _context.Transacciones.Add(nueva);
         await _context.SaveChangesAsync();
 
@@ -454,5 +462,34 @@ public class TransaccionesService : ITransaccionesService
             Descripcion = nueva.Descripcion,
             IdTransaccionExterna = nueva.IdTransaccionExterna
         };
+    }
+
+    private async Task IntentarAutocategorizarAsync(Transaccion transaccion, Guid usuarioId)
+    {
+        if (transaccion.CategoriaId.HasValue)
+            return;
+
+        try
+        {
+            var sugerencia = await _iaFinanzasService.SugerirCategoriaAsync(
+                new SugerenciaCategoriaRequestDto
+                {
+                    Descripcion = transaccion.Descripcion ?? string.Empty,
+                    Importe = transaccion.Importe,
+                    Tipo = (int)transaccion.Tipo,
+                    UsuarioId = usuarioId
+                });
+
+            var mejor = sugerencia.MejorSugerencia;
+
+            if (mejor?.CategoriaId.HasValue == true && !sugerencia.RequiereConfirmacion)
+            {
+                transaccion.CategoriaId = mejor.CategoriaId.Value;
+            }
+        }
+        catch
+        {
+            // La transacción no debe fallar si la sugerencia IA no está disponible.
+        }
     }
 }

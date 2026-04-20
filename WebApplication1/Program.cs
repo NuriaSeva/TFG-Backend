@@ -43,6 +43,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.Configure<TinkOptions>(
     builder.Configuration.GetSection("Tink"));
+builder.Services.Configure<IAOptions>(
+    builder.Configuration.GetSection("IA"));
 
 builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
 
@@ -50,6 +52,7 @@ builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
 
 builder.Services.AddScoped<ITransaccionesService, TransaccionesService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IIAFinanzasService, IAFinanzasService>();
 
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
