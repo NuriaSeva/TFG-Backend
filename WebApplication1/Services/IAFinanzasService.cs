@@ -40,12 +40,14 @@ public class IAFinanzasService : IIAFinanzasService
 
     private static readonly KeywordRule[] KeywordRules =
     {
-        new("mercadona", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
-        new("carrefour", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
-        new("lidl", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
-        new("dia", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.90m),
-        new("eroski", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
-        new("alcampo", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
+        // Priorizamos "supermercado" para evitar que acabe en categorías amplias
+        // como "comida y bebida" cuando ambas existen.
+        new("mercadona", new[] { "supermercado" }, 0.95m),
+        new("carrefour", new[] { "supermercado" }, 0.95m),
+        new("lidl", new[] { "supermercado" }, 0.95m),
+        new("dia", new[] { "supermercado" }, 0.90m),
+        new("eroski", new[] { "supermercado" }, 0.95m),
+        new("alcampo", new[] { "supermercado" }, 0.95m),
 
         new("repsol", new[] { "combustible", "coche", "transporte" }, 0.95m),
         new("cepsa", new[] { "combustible", "coche", "transporte" }, 0.95m),
@@ -64,10 +66,11 @@ public class IAFinanzasService : IIAFinanzasService
         new("alquiler", new[] { "alquiler", "hipoteca", "arrend" }, 0.90m),
         new("renta", new[] { "alquiler", "hipoteca", "arrend" }, 0.85m),
 
-        new("netflix", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m),
-        new("spotify", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m),
-        new("disney", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m),
-        new("hbo", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m)
+        // Priorizamos "suscripciones" para plataformas recurrentes.
+        new("netflix", new[] { "suscripcion", "suscripciones", "subscripcion", "subscripciones" }, 0.95m),
+        new("spotify", new[] { "suscripcion", "suscripciones", "subscripcion", "subscripciones" }, 0.95m),
+        new("disney", new[] { "suscripcion", "suscripciones", "subscripcion", "subscripciones" }, 0.95m),
+        new("hbo", new[] { "suscripcion", "suscripciones", "subscripcion", "subscripciones" }, 0.95m)
     };
 
     public IAFinanzasService(
