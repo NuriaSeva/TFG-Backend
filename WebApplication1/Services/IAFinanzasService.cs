@@ -86,7 +86,7 @@ public class IAFinanzasService : IIAFinanzasService
     public async Task<EntrenamientoModeloCategoriasResponseDto> EntrenarModeloCategoriasAsync(bool forzar = false, CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled)
-            throw new BadRequestException("El m贸dulo de IA est谩 deshabilitado en configuraci贸n.");
+            throw new BadRequestException("Las recomendaciones autom醫icas est醤 desactivadas en este momento.");
 
         var datasetPath = ResolverRuta(_options.DatasetPath);
         var modelDir = ResolverRuta(_options.ModelOutputPath);
@@ -202,7 +202,7 @@ public class IAFinanzasService : IIAFinanzasService
     public async Task<SugerenciaCategoriaResponseDto> SugerirCategoriaAsync(SugerenciaCategoriaRequestDto request, CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled)
-            throw new BadRequestException("El m贸dulo de IA est谩 deshabilitado en configuraci贸n.");
+            throw new BadRequestException("Las recomendaciones autom醫icas est醤 desactivadas en este momento.");
 
         if (string.IsNullOrWhiteSpace(request.Descripcion))
             throw new BadRequestException("La descripci贸n es obligatoria para sugerir categor铆a.");
@@ -261,7 +261,7 @@ public class IAFinanzasService : IIAFinanzasService
         try
         {
             if (_modelo == null)
-                throw new InvalidOperationException("No se pudo cargar el modelo para sugerir categor铆as.");
+                throw new InvalidOperationException("Ahora mismo no podemos recomendar una categor韆.");
 
             modeloActual = _modelo;
             etiquetas = _etiquetasOrdenadas;
@@ -890,3 +890,4 @@ public class IAFinanzasService : IIAFinanzasService
 
     private sealed record KeywordRule(string Keyword, string[] CategoryHints, decimal Weight);
 }
+
