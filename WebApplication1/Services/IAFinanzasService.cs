@@ -26,6 +26,50 @@ public class IAFinanzasService : IIAFinanzasService
     private string[] _etiquetasOrdenadas = Array.Empty<string>();
     private DateTime _fechaModeloUtc = DateTime.MinValue;
 
+    private static readonly HashSet<string> TokensIgnorados = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "y", "de", "del", "la", "el", "los", "las", "al", "en", "the", "other", "otros"
+    };
+
+    private static readonly HashSet<string> TokensOperacion = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "compra", "ticket", "factura", "movimiento", "cargo", "pago", "tarjeta",
+        "abono", "ingreso", "entrada", "transferencia", "recibida", "servicio", "online",
+        "comercio", "local", "proveedor", "habitual"
+    };
+
+    private static readonly KeywordRule[] KeywordRules =
+    {
+        new("mercadona", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
+        new("carrefour", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
+        new("lidl", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
+        new("dia", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.90m),
+        new("eroski", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
+        new("alcampo", new[] { "supermercado", "comida", "food", "alimentacion", "comida y bebida" }, 0.95m),
+
+        new("repsol", new[] { "combustible", "coche", "transporte" }, 0.95m),
+        new("cepsa", new[] { "combustible", "coche", "transporte" }, 0.95m),
+        new("gasolina", new[] { "combustible", "coche", "transporte" }, 0.95m),
+        new("gasoil", new[] { "combustible", "coche", "transporte" }, 0.95m),
+        new("combustible", new[] { "combustible", "coche", "transporte" }, 0.90m),
+
+        new("uber", new[] { "taxi", "transporte" }, 0.95m),
+        new("cabify", new[] { "taxi", "transporte" }, 0.95m),
+        new("taxi", new[] { "taxi", "transporte" }, 0.95m),
+
+        new("nomina", new[] { "salario", "ingres", "nomina", "prestacion", "pension" }, 0.95m),
+        new("salario", new[] { "salario", "ingres", "nomina", "prestacion", "pension" }, 0.95m),
+        new("payroll", new[] { "salario", "ingres", "nomina" }, 0.95m),
+
+        new("alquiler", new[] { "alquiler", "hipoteca", "arrend" }, 0.90m),
+        new("renta", new[] { "alquiler", "hipoteca", "arrend" }, 0.85m),
+
+        new("netflix", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m),
+        new("spotify", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m),
+        new("disney", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m),
+        new("hbo", new[] { "aficiones", "hobby", "ocio", "suscripcion" }, 0.85m)
+    };
+
     public IAFinanzasService(
         FinMindDbContext context,
         IWebHostEnvironment environment,
@@ -80,11 +124,14 @@ public class IAFinanzasService : IIAFinanzasService
                 allowQuoting: true,
                 trimWhitespace: true);
 
-            var registros = _mlContext.Data.CreateEnumerable<CategoriaTrainingInput>(data, reuseRowObject: false).ToList();
-            if (registros.Count == 0)
+            var registrosBase = _mlContext.Data.CreateEnumerable<CategoriaTrainingInput>(data, reuseRowObject: false).ToList();
+            if (registrosBase.Count == 0)
                 throw new BadRequestException("El dataset no contiene registros para entrenar.");
 
-            var categorias = registros
+            var categoriasActivas = await ObtenerCategoriasActivasParaEntrenamientoAsync(cancellationToken);
+            var registrosEntrenamiento = ExpandirRegistrosEntrenamiento(registrosBase, categoriasActivas);
+
+            var categorias = registrosEntrenamiento
                 .Select(r => r.Categoria)
                 .Where(c => !string.IsNullOrWhiteSpace(c))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -94,7 +141,7 @@ public class IAFinanzasService : IIAFinanzasService
             if (categorias.Length < 2)
                 throw new BadRequestException("Se requieren al menos dos categorías distintas para entrenar el modelo.");
 
-            var dataView = _mlContext.Data.LoadFromEnumerable(registros);
+            var dataView = _mlContext.Data.LoadFromEnumerable(registrosEntrenamiento);
             var split = _mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
 
             var pipeline = _mlContext.Transforms.Conversion.MapValueToKey(
@@ -122,7 +169,11 @@ public class IAFinanzasService : IIAFinanzasService
             }
 
             _modelo = model;
-            _etiquetasOrdenadas = categorias;
+            var schemaSalida = model.GetOutputSchema(split.TrainSet.Schema);
+            _etiquetasOrdenadas = CargarEtiquetasDesdeSchema(schemaSalida);
+            if (_etiquetasOrdenadas.Length == 0)
+                _etiquetasOrdenadas = categorias;
+
             _fechaModeloUtc = DateTime.UtcNow;
 
             return new EntrenamientoModeloCategoriasResponseDto
@@ -131,8 +182,8 @@ public class IAFinanzasService : IIAFinanzasService
                 ModeloEntrenadoEnEjecucion = true,
                 MacroAccuracy = Convert.ToDecimal(metrics.MacroAccuracy),
                 MicroAccuracy = Convert.ToDecimal(metrics.MicroAccuracy),
-                RegistrosEntrenamiento = registros.Count,
-                CategoriasDetectadas = categorias.Length,
+                RegistrosEntrenamiento = registrosEntrenamiento.Count,
+                CategoriasDetectadas = _etiquetasOrdenadas.Length,
                 RutaDataset = datasetPath,
                 RutaModelo = modelPath,
                 Mensaje = "Modelo entrenado correctamente.",
@@ -185,6 +236,10 @@ public class IAFinanzasService : IIAFinanzasService
             };
         }
 
+        var sugerenciaPorReglas = ObtenerSugerenciaPorKeywords(descripcionNormalizada, categoriasCandidatas);
+        if (sugerenciaPorReglas != null)
+            return sugerenciaPorReglas;
+
         await GarantizarModeloDisponibleAsync(cancellationToken);
 
         var input = new CategoriaTrainingInput
@@ -216,54 +271,35 @@ public class IAFinanzasService : IIAFinanzasService
         var engine = _mlContext.Model.CreatePredictionEngine<CategoriaTrainingInput, CategoriaPrediction>(modeloActual);
         output = engine.Predict(input);
 
+        var indiceCategorias = categoriasCandidatas
+            .GroupBy(c => Normalizar(c.Nombre))
+            .ToDictionary(g => g.Key, g => g.First());
+
         var scoreVector = output.Score ?? Array.Empty<float>();
         var probabilidades = scoreVector.Length > 0
             ? Softmax(scoreVector)
             : Array.Empty<decimal>();
 
-        var topEtiquetas = new List<(string Etiqueta, decimal Confianza)>();
+        var alternativas = ConstruirAlternativasModelo(probabilidades, etiquetas, indiceCategorias);
 
-        if (probabilidades.Length > 0 && etiquetas.Length == probabilidades.Length)
+        if (alternativas.Count == 0)
         {
-            topEtiquetas = etiquetas
-                .Select((categoria, index) => (Etiqueta: categoria, Confianza: probabilidades[index]))
-                .OrderByDescending(x => x.Confianza)
-                .Take(3)
-                .ToList();
-        }
-        else
-        {
-            var fallback = string.IsNullOrWhiteSpace(output.PredictedLabel)
+            var etiquetaPredicha = string.IsNullOrWhiteSpace(output.PredictedLabel)
                 ? categoriasCandidatas[0].Nombre
                 : output.PredictedLabel;
 
-            topEtiquetas.Add((fallback, 1m));
-        }
-
-        var indiceCategorias = categoriasCandidatas
-            .GroupBy(c => Normalizar(c.Nombre))
-            .ToDictionary(g => g.Key, g => g.First());
-
-        var alternativas = topEtiquetas
-            .Select(item =>
+            var keyPredicha = Normalizar(etiquetaPredicha);
+            if (indiceCategorias.TryGetValue(keyPredicha, out var categoriaPredicha))
             {
-                var key = Normalizar(item.Etiqueta);
-                var existe = indiceCategorias.TryGetValue(key, out var categoria);
-
-                if (!existe)
-                    return null;
-
-                return new CategoriaSugeridaDto
+                alternativas.Add(new CategoriaSugeridaDto
                 {
-                    CategoriaId = categoria!.Id,
-                    CategoriaNombre = categoria.Nombre,
-                    Confianza = Math.Round(item.Confianza, 4),
+                    CategoriaId = categoriaPredicha.Id,
+                    CategoriaNombre = categoriaPredicha.Nombre,
+                    Confianza = 0.45m,
                     Fuente = "modelo-global"
-                };
-            })
-            .Where(a => a != null)
-            .Select(a => a!)
-            .ToList();
+                });
+            }
+        }
 
         var mejor = alternativas.FirstOrDefault();
         var confianza = mejor?.Confianza ?? 0m;
@@ -275,6 +311,320 @@ public class IAFinanzasService : IIAFinanzasService
             Confianza = confianza,
             Fuente = "modelo-global",
             RequiereConfirmacion = confianza < _options.ConfidenceThreshold || mejor?.CategoriaId == null,
+            UmbralAutoasignacion = _options.ConfidenceThreshold
+        };
+    }
+
+    private List<CategoriaTrainingInput> ExpandirRegistrosEntrenamiento(
+        List<CategoriaTrainingInput> registrosBase,
+        List<CategoriaSemillaEntrenamiento> categoriasActivas)
+    {
+        var expandidos = new List<CategoriaTrainingInput>(registrosBase.Count * 4);
+        var vistos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var etiquetaCanonicaPorTipoYCategoria = registrosBase
+            .Where(r => !string.IsNullOrWhiteSpace(r.Categoria))
+            .GroupBy(
+                r => $"{(r.Tipo <= 1.5f ? 1 : 2)}|{Normalizar(r.Categoria)}",
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Categoria, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var registro in registrosBase)
+        {
+            AgregarVariante(registro, registro.Descripcion);
+
+            var descripcionLimpia = LimpiarDescripcionEntrenamiento(registro.Descripcion, registro.Categoria);
+            AgregarVariante(registro, descripcionLimpia);
+
+            var descripcionClave = ExtraerTokensClave(descripcionLimpia);
+            AgregarVariante(registro, descripcionClave);
+        }
+
+        foreach (var categoria in categoriasActivas)
+        {
+            if (string.IsNullOrWhiteSpace(categoria.Nombre))
+                continue;
+
+            var tipo = categoria.Tipo == TipoCategoria.Ingreso ? 1 : 2;
+            var tipoFloat = tipo == 1 ? 1f : 2f;
+            var key = $"{tipo}|{Normalizar(categoria.Nombre)}";
+            var etiqueta = etiquetaCanonicaPorTipoYCategoria.TryGetValue(key, out var existente)
+                ? existente
+                : categoria.Nombre.Trim();
+
+            var registroSemilla = new CategoriaTrainingInput
+            {
+                Categoria = etiqueta,
+                Tipo = tipoFloat,
+                Importe = tipo == 1 ? 1250f : 55f
+            };
+
+            foreach (var descripcionSemilla in GenerarDescripcionesSemilla(etiqueta, tipo))
+            {
+                AgregarVariante(registroSemilla, descripcionSemilla);
+            }
+        }
+
+        return expandidos;
+
+        void AgregarVariante(CategoriaTrainingInput baseRegistro, string? descripcionVariante)
+        {
+            if (string.IsNullOrWhiteSpace(descripcionVariante))
+                return;
+
+            var descripcion = descripcionVariante.Trim();
+            if (descripcion.Length < 3)
+                return;
+
+            var uniqueKey = $"{baseRegistro.Tipo}|{Normalizar(baseRegistro.Categoria)}|{descripcion}";
+            if (!vistos.Add(uniqueKey))
+                return;
+
+            expandidos.Add(new CategoriaTrainingInput
+            {
+                Descripcion = descripcion,
+                Importe = baseRegistro.Importe,
+                Tipo = baseRegistro.Tipo,
+                Categoria = baseRegistro.Categoria
+            });
+        }
+    }
+
+    private async Task<List<CategoriaSemillaEntrenamiento>> ObtenerCategoriasActivasParaEntrenamientoAsync(CancellationToken cancellationToken)
+    {
+        var categorias = await _context.Categorias
+            .AsNoTracking()
+            .Where(c => !c.Archivada)
+            .Select(c => new CategoriaSemillaEntrenamiento(c.Nombre, c.Tipo))
+            .ToListAsync(cancellationToken);
+
+        return categorias
+            .Where(c => !string.IsNullOrWhiteSpace(c.Nombre))
+            .GroupBy(c => $"{(int)c.Tipo}|{Normalizar(c.Nombre)}", StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static IEnumerable<string> GenerarDescripcionesSemilla(string categoria, int tipo)
+    {
+        if (string.IsNullOrWhiteSpace(categoria))
+            yield break;
+
+        var categoriaLimpia = categoria.Trim();
+
+        if (tipo == 1)
+        {
+            yield return $"ingreso {categoriaLimpia}";
+            yield return $"abono {categoriaLimpia}";
+            yield return $"transferencia recibida {categoriaLimpia}";
+            yield return $"cobro {categoriaLimpia}";
+            yield return $"{categoriaLimpia} mensual";
+            yield return $"pago recibido {categoriaLimpia}";
+            yield break;
+        }
+
+        yield return $"compra {categoriaLimpia}";
+        yield return $"pago tarjeta {categoriaLimpia}";
+        yield return $"ticket {categoriaLimpia}";
+        yield return $"factura {categoriaLimpia}";
+        yield return $"cargo {categoriaLimpia}";
+        yield return $"movimiento {categoriaLimpia}";
+        yield return $"{categoriaLimpia} mensual";
+        yield return $"servicio {categoriaLimpia}";
+    }
+
+    private static string LimpiarDescripcionEntrenamiento(string descripcion, string categoria)
+    {
+        var tokens = TokenizarConOrden(Normalizar(descripcion));
+        if (tokens.Count == 0)
+            return string.Empty;
+
+        var categoriaTokens = TokenizarConOrden(Normalizar(categoria))
+            .Where(t => !TokensIgnorados.Contains(t))
+            .ToList();
+
+        if (categoriaTokens.Count > 0 && tokens.Count >= categoriaTokens.Count)
+        {
+            var segmentoFinal = tokens.Skip(tokens.Count - categoriaTokens.Count).ToList();
+            if (segmentoFinal.SequenceEqual(categoriaTokens))
+            {
+                tokens.RemoveRange(tokens.Count - categoriaTokens.Count, categoriaTokens.Count);
+            }
+        }
+
+        var tokensLimpios = tokens
+            .Where(t => !TokensOperacion.Contains(t))
+            .ToList();
+
+        if (tokensLimpios.Count == 0)
+            tokensLimpios = tokens;
+
+        return string.Join(' ', tokensLimpios);
+    }
+
+    private static string ExtraerTokensClave(string descripcionNormalizada)
+    {
+        var salida = new List<string>();
+        var vistos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var token in TokenizarConOrden(descripcionNormalizada))
+        {
+            if (token.Length < 3 || TokensIgnorados.Contains(token) || TokensOperacion.Contains(token))
+                continue;
+
+            if (vistos.Add(token))
+            {
+                salida.Add(token);
+                if (salida.Count == 3)
+                    break;
+            }
+        }
+
+        return string.Join(' ', salida);
+    }
+
+    private static List<CategoriaSugeridaDto> ConstruirAlternativasModelo(
+        decimal[] probabilidades,
+        string[] etiquetas,
+        Dictionary<string, Categoria> indiceCategorias)
+    {
+        if (probabilidades.Length == 0 || etiquetas.Length != probabilidades.Length)
+            return new List<CategoriaSugeridaDto>();
+
+        var probabilidadPorCategoria = new Dictionary<Guid, (Categoria Categoria, decimal ProbRaw)>();
+
+        for (var i = 0; i < etiquetas.Length; i++)
+        {
+            var key = Normalizar(etiquetas[i]);
+            if (!indiceCategorias.TryGetValue(key, out var categoria))
+                continue;
+
+            if (probabilidadPorCategoria.TryGetValue(categoria.Id, out var actual))
+            {
+                probabilidadPorCategoria[categoria.Id] = (actual.Categoria, actual.ProbRaw + probabilidades[i]);
+            }
+            else
+            {
+                probabilidadPorCategoria[categoria.Id] = (categoria, probabilidades[i]);
+            }
+        }
+
+        if (probabilidadPorCategoria.Count == 0)
+            return new List<CategoriaSugeridaDto>();
+
+        var sumaCandidatas = probabilidadPorCategoria.Values.Sum(x => x.ProbRaw);
+        if (sumaCandidatas <= 0)
+            sumaCandidatas = 1m;
+
+        return probabilidadPorCategoria
+            .Values
+            .Select(x =>
+            {
+                var probNormalizada = x.ProbRaw / sumaCandidatas;
+                var confianza = CalibrarConfianzaModelo(x.ProbRaw, probNormalizada);
+
+                return new CategoriaSugeridaDto
+                {
+                    CategoriaId = x.Categoria.Id,
+                    CategoriaNombre = x.Categoria.Nombre,
+                    Confianza = confianza,
+                    Fuente = "modelo-global"
+                };
+            })
+            .OrderByDescending(x => x.Confianza)
+            .Take(3)
+            .ToList();
+    }
+
+    private SugerenciaCategoriaResponseDto? ObtenerSugerenciaPorKeywords(
+        string descripcionNormalizada,
+        List<Categoria> categoriasCandidatas)
+    {
+        var tokensDescripcion = Tokenizar(descripcionNormalizada);
+        if (tokensDescripcion.Count == 0)
+            return null;
+
+        var categoriasPorId = categoriasCandidatas.ToDictionary(c => c.Id);
+        var nombresNormalizados = categoriasCandidatas.ToDictionary(c => c.Id, c => Normalizar(c.Nombre));
+        var puntuacionPorCategoria = new Dictionary<Guid, decimal>();
+
+        void Acumular(Guid categoriaId, decimal puntuacion)
+        {
+            if (!puntuacionPorCategoria.TryAdd(categoriaId, puntuacion))
+            {
+                puntuacionPorCategoria[categoriaId] += puntuacion;
+            }
+        }
+
+        foreach (var categoria in categoriasCandidatas)
+        {
+            var nombreNormalizado = nombresNormalizados[categoria.Id];
+            if (string.IsNullOrWhiteSpace(nombreNormalizado))
+                continue;
+
+            if (descripcionNormalizada.Contains(nombreNormalizado, StringComparison.Ordinal))
+            {
+                Acumular(categoria.Id, 0.90m);
+            }
+
+            foreach (var tokenCategoria in Tokenizar(nombreNormalizado))
+            {
+                if (tokenCategoria.Length < 4 || TokensIgnorados.Contains(tokenCategoria))
+                    continue;
+
+                if (tokensDescripcion.Contains(tokenCategoria))
+                {
+                    Acumular(categoria.Id, 0.22m);
+                }
+            }
+        }
+
+        foreach (var rule in KeywordRules)
+        {
+            if (!tokensDescripcion.Contains(rule.Keyword))
+                continue;
+
+            foreach (var categoria in categoriasCandidatas)
+            {
+                var nombreNormalizado = nombresNormalizados[categoria.Id];
+                if (rule.CategoryHints.Any(h => nombreNormalizado.Contains(h, StringComparison.Ordinal)))
+                {
+                    Acumular(categoria.Id, rule.Weight);
+                }
+            }
+        }
+
+        if (puntuacionPorCategoria.Count == 0)
+            return null;
+
+        var ranking = puntuacionPorCategoria
+            .OrderByDescending(x => x.Value)
+            .Take(3)
+            .ToList();
+
+        var mejorPuntuacion = ranking[0].Value;
+        if (mejorPuntuacion < 0.65m)
+            return null;
+
+        var alternativas = ranking
+            .Select(item => new CategoriaSugeridaDto
+            {
+                CategoriaId = item.Key,
+                CategoriaNombre = categoriasPorId[item.Key].Nombre,
+                Confianza = CalcularConfianzaRegla(item.Value),
+                Fuente = "regla-keywords"
+            })
+            .ToList();
+
+        var mejor = alternativas[0];
+
+        return new SugerenciaCategoriaResponseDto
+        {
+            MejorSugerencia = mejor,
+            Alternativas = alternativas,
+            Confianza = mejor.Confianza,
+            Fuente = "regla-keywords",
+            RequiereConfirmacion = mejor.Confianza < _options.ConfidenceThreshold,
             UmbralAutoasignacion = _options.ConfidenceThreshold
         };
     }
@@ -319,8 +669,55 @@ public class IAFinanzasService : IIAFinanzasService
         DataViewSchema schema;
         using var stream = File.OpenRead(modelPath);
         _modelo = _mlContext.Model.Load(stream, out schema);
-        _etiquetasOrdenadas = CargarCategoriasDesdeDataset().ToArray();
+        _etiquetasOrdenadas = CargarEtiquetasDesdeSchema(schema);
+        if (_etiquetasOrdenadas.Length == 0)
+            _etiquetasOrdenadas = CargarCategoriasDesdeDataset().ToArray();
+
         _fechaModeloUtc = File.GetLastWriteTimeUtc(modelPath);
+    }
+
+    private static string[] CargarEtiquetasDesdeSchema(DataViewSchema schema)
+    {
+        var scoreColumnFound = false;
+        var scoreColumn = default(DataViewSchema.Column);
+
+        for (var i = 0; i < schema.Count; i++)
+        {
+            var current = schema[i];
+            if (!string.Equals(current.Name, "Score", StringComparison.Ordinal))
+                continue;
+
+            scoreColumn = current;
+            scoreColumnFound = true;
+            break;
+        }
+
+        if (!scoreColumnFound)
+            return Array.Empty<string>();
+
+        var annotations = scoreColumn.Annotations;
+        var hasSlotNames = false;
+
+        for (var i = 0; i < annotations.Schema.Count; i++)
+        {
+            if (string.Equals(annotations.Schema[i].Name, "SlotNames", StringComparison.Ordinal))
+            {
+                hasSlotNames = true;
+                break;
+            }
+        }
+
+        if (!hasSlotNames)
+            return Array.Empty<string>();
+
+        VBuffer<ReadOnlyMemory<char>> slotNames = default;
+        annotations.GetValue("SlotNames", ref slotNames);
+
+        return slotNames
+            .DenseValues()
+            .Select(v => v.ToString())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToArray();
     }
 
     private List<string> CargarCategoriasDesdeDataset()
@@ -394,6 +791,55 @@ public class IAFinanzasService : IIAFinanzasService
         return exp.Select(v => Convert.ToDecimal(v / sum)).ToArray();
     }
 
+    private static decimal CalcularConfianzaRegla(decimal score)
+    {
+        var confianza = 0.45m + (score * 0.35m);
+        if (confianza > 0.99m)
+            confianza = 0.99m;
+
+        return Math.Round(confianza, 4);
+    }
+
+    private static decimal CalibrarConfianzaModelo(decimal rawProbability, decimal normalizedProbability)
+    {
+        var confianza = (rawProbability * 0.10m) + (normalizedProbability * 0.90m);
+        return Math.Round(Math.Clamp(confianza, 0m, 0.99m), 4);
+    }
+
+    private static List<string> TokenizarConOrden(string valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+            return new List<string>();
+
+        var sb = new StringBuilder(valor.Length);
+        foreach (var ch in valor)
+        {
+            sb.Append(char.IsLetterOrDigit(ch) ? ch : ' ');
+        }
+
+        return sb
+            .ToString()
+            .Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToList();
+    }
+
+    private static HashSet<string> Tokenizar(string valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor))
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var sb = new StringBuilder(valor.Length);
+        foreach (var ch in valor)
+        {
+            sb.Append(char.IsLetterOrDigit(ch) ? ch : ' ');
+        }
+
+        return sb
+            .ToString()
+            .Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     private static string Normalizar(string valor)
     {
         if (string.IsNullOrWhiteSpace(valor))
@@ -436,4 +882,8 @@ public class IAFinanzasService : IIAFinanzasService
 
         public float[] Score { get; set; } = Array.Empty<float>();
     }
+
+    private sealed record CategoriaSemillaEntrenamiento(string Nombre, TipoCategoria Tipo);
+
+    private sealed record KeywordRule(string Keyword, string[] CategoryHints, decimal Weight);
 }

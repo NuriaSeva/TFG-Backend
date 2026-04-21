@@ -63,6 +63,8 @@ public class TransaccionesService : ITransaccionesService
                 CuentaBancariaId = t.CuentaBancariaId,
                 CategoriaId = t.CategoriaId,
                 CategoriaNombre = t.Categoria != null ? t.Categoria.Nombre : null,
+                CategoriaIcono = t.Categoria != null ? t.Categoria.Icono : null,
+                CategoriaColor = t.Categoria != null ? t.Categoria.Color : null,
                 Importe = t.Importe,
                 Moneda = t.Moneda,
                 Tipo = (int)t.Tipo,
@@ -447,12 +449,23 @@ public class TransaccionesService : ITransaccionesService
         _context.Transacciones.Add(nueva);
         await _context.SaveChangesAsync();
 
+        Categoria? categoria = null;
+        if (nueva.CategoriaId.HasValue)
+        {
+            categoria = await _context.Categorias
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == nueva.CategoriaId.Value);
+        }
+
         return new TransaccionesUsuarioResponseDto
         {
             Id = nueva.Id,
             UsuarioId = nueva.UsuarioId,
             CuentaBancariaId = nueva.CuentaBancariaId,
             CategoriaId = nueva.CategoriaId,
+            CategoriaNombre = categoria?.Nombre,
+            CategoriaIcono = categoria?.Icono,
+            CategoriaColor = categoria?.Color,
             Importe = nueva.Importe,
             Moneda = nueva.Moneda,
             Tipo = (int)nueva.Tipo,

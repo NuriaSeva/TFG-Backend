@@ -10,4 +10,8 @@
         public string? Descripcion { get; set; }
         public string? Moneda { get; set; } = "EUR";
     }
+    public sealed class ActualizarCategoriaTransaccionRequest
+    {
+        public Guid? CategoriaId { get; set; }
+    }
 }

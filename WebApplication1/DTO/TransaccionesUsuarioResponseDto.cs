@@ -7,6 +7,8 @@ public class TransaccionesUsuarioResponseDto
     public Guid? CuentaBancariaId { get; set; }
 
     public string? CategoriaNombre { get; set; }
+    public string? CategoriaIcono { get; set; }
+    public string? CategoriaColor { get; set; }
     public Guid? CategoriaId { get; set; }
     public decimal Importe { get; set; }
     public string Moneda { get; set; } = "EUR";

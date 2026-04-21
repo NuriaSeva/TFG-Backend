@@ -1,4 +1,4 @@
-using FinMind.Common.Exceptions;
+﻿using FinMind.Common.Exceptions;
 using FinMind.Data;
 using FinMind.DTO;
 using FinMind.Interfaces;
@@ -91,6 +91,44 @@ public class TransaccionesController : BaseController
         transaccionActual.Fecha = transaccion.Fecha;
         transaccionActual.Descripcion = transaccion.Descripcion;
         transaccionActual.IdTransaccionExterna = transaccion.IdTransaccionExterna;
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpPatch("{id}/categoria")]
+    [Authorize]
+    public async Task<IActionResult> ActualizarCategoriaImportada(Guid id, [FromBody] ActualizarCategoriaTransaccionRequest request)
+    {
+        var usuarioId = ObtenerUsuarioId();
+
+        var transaccion = await _context.Transacciones
+            .FirstOrDefaultAsync(t => t.Id == id && t.UsuarioId == usuarioId);
+
+        if (transaccion == null)
+            throw new NotFoundException("No se ha encontrado la transacción.");
+
+        if (transaccion.Origen != OrigenTransaccion.Banco)
+            throw new BadRequestException("Solo se puede modificar la categoría de transacciones importadas.");
+
+        if (request.CategoriaId.HasValue)
+        {
+            var categoria = await _context.Categorias
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == request.CategoriaId.Value);
+
+            if (categoria == null)
+                throw new BadRequestException("La categoría indicada no existe.");
+
+            if (categoria.UsuarioId.HasValue && categoria.UsuarioId.Value != usuarioId)
+                throw new BadRequestException("La categoría indicada no pertenece al usuario.");
+
+            if ((int)categoria.Tipo != (int)transaccion.Tipo)
+                throw new BadRequestException("La categoría seleccionada no es compatible con el tipo de transacción.");
+        }
+
+        transaccion.CategoriaId = request.CategoriaId;
 
         await _context.SaveChangesAsync();
 
