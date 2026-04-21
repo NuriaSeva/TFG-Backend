@@ -14,7 +14,7 @@ public abstract class BaseController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(claim))
         {
-            throw new UnauthorizedAccessException("No se pudo resolver el usuario autenticado desde el token.");
+            throw new UnauthorizedAccessException("No hemos podido validar tu sesión. Vuelve a iniciar sesión.");
         }
 
         return Guid.Parse(claim);
