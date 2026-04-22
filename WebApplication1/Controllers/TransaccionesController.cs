@@ -139,10 +139,15 @@ public class TransaccionesController : BaseController
     [Authorize]
     public async Task<IActionResult> Eliminar(Guid id)
     {
-        var transaccion = await _context.Transacciones.FindAsync(id);
+        var usuarioId = ObtenerUsuarioId();
+        var transaccion = await _context.Transacciones
+            .FirstOrDefaultAsync(t => t.Id == id && t.UsuarioId == usuarioId);
 
         if (transaccion == null)
             throw new NotFoundException("No se ha encontrado la transacción.");
+
+        if (transaccion.Origen != OrigenTransaccion.Manual)
+            throw new BadRequestException("Solo se pueden eliminar movimientos manuales.");
 
         _context.Transacciones.Remove(transaccion);
         await _context.SaveChangesAsync();

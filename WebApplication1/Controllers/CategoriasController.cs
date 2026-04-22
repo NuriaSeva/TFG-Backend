@@ -155,19 +155,56 @@ public class CategoriasController : BaseController
     [Authorize]
     public async Task<IActionResult> Eliminar(Guid id)
     {
-        var categoria = await _context.Categorias.FindAsync(id);
+        var usuarioId = ObtenerUsuarioId();
+        var categoria = await _context.Categorias
+            .FirstOrDefaultAsync(c => c.Id == id && c.UsuarioId == usuarioId);
 
         if (categoria == null)
             throw new NotFoundException("No se ha encontrado la categoría.");
 
-        var estaEnUso = await _context.Transacciones.AnyAsync(t => t.CategoriaId == id);
-        if (estaEnUso)
-            throw new BadRequestException("No se puede eliminar una categoría que está siendo usada por transacciones. Archívala en su lugar.");
+        if (categoria.EsSistema)
+            throw new BadRequestException("No se puede eliminar una categoría del sistema.");
+
+        var transaccionesAsociadas = await _context.Transacciones
+            .Where(t => t.UsuarioId == usuarioId && t.CategoriaId == id)
+            .ToListAsync();
+
+        if (transaccionesAsociadas.Count > 0)
+        {
+            foreach (var transaccion in transaccionesAsociadas)
+            {
+                transaccion.CategoriaId = null;
+            }
+        }
 
         _context.Categorias.Remove(categoria);
         await _context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    [HttpGet("{id}/impacto-eliminacion")]
+    [Authorize]
+    public async Task<IActionResult> ObtenerImpactoEliminacion(Guid id)
+    {
+        var usuarioId = ObtenerUsuarioId();
+        var categoria = await _context.Categorias
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id && c.UsuarioId == usuarioId);
+
+        if (categoria == null)
+            throw new NotFoundException("No se ha encontrado la categoría.");
+
+        if (categoria.EsSistema)
+            throw new BadRequestException("No se puede eliminar una categoría del sistema.");
+
+        var movimientosSinCategoria = await _context.Transacciones
+            .CountAsync(t => t.UsuarioId == usuarioId && t.CategoriaId == id);
+
+        return Ok(new
+        {
+            movimientosSinCategoria
+        });
     }
 
     private static void NormalizarCategoria(Categoria categoria)

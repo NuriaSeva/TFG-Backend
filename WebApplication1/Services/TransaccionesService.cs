@@ -5,6 +5,7 @@ using FinMind.DTO.IA;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -16,15 +17,18 @@ public class TransaccionesService : ITransaccionesService
     private readonly FinMindDbContext _context;
     private readonly ITinkBankingService _tinkBankingService;
     private readonly IIAFinanzasService _iaFinanzasService;
+    private readonly ILogger<TransaccionesService> _logger;
 
     public TransaccionesService(
         FinMindDbContext context,
         ITinkBankingService tinkBankingService,
-        IIAFinanzasService iaFinanzasService)
+        IIAFinanzasService iaFinanzasService,
+        ILogger<TransaccionesService> logger)
     {
         _context = context;
         _tinkBankingService = tinkBankingService;
         _iaFinanzasService = iaFinanzasService;
+        _logger = logger;
     }
 
     public async Task<PaginacionDTO<TransaccionesUsuarioResponseDto>> ObtenerPorUsuarioAsync(
@@ -488,10 +492,11 @@ public class TransaccionesService : ITransaccionesService
 
         try
         {
+            var descripcionNormalizada = NormalizarDescripcionParaIA(transaccion.Descripcion);
             var sugerencia = await _iaFinanzasService.SugerirCategoriaAsync(
                 new SugerenciaCategoriaRequestDto
                 {
-                    Descripcion = transaccion.Descripcion ?? string.Empty,
+                    Descripcion = descripcionNormalizada,
                     Importe = transaccion.Importe,
                     Tipo = (int)transaccion.Tipo,
                     UsuarioId = usuarioId
@@ -504,9 +509,44 @@ public class TransaccionesService : ITransaccionesService
                 transaccion.CategoriaId = mejor.CategoriaId.Value;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // La transacción no debe fallar si la sugerencia IA no está disponible.
+            _logger.LogWarning(
+                ex,
+                "No se pudo autocategorizar la transaccion {TransaccionId} del usuario {UsuarioId}.",
+                transaccion.Id,
+                usuarioId);
         }
     }
+
+    private static string NormalizarDescripcionParaIA(string? descripcion)
+    {
+        if (string.IsNullOrWhiteSpace(descripcion))
+            return string.Empty;
+
+        var texto = descripcion
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Trim();
+
+        var sb = new StringBuilder(texto.Length);
+        foreach (var ch in texto)
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                sb.Append(char.ToLowerInvariant(ch));
+            }
+            else
+            {
+                sb.Append(' ');
+            }
+        }
+
+        var limpio = string.Join(
+            ' ',
+            sb.ToString().Split(' ', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+
+        return string.IsNullOrWhiteSpace(limpio) ? texto : limpio;
+    }
 }
+
