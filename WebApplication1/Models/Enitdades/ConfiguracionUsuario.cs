@@ -31,6 +31,8 @@ public class ConfiguracionUsuario
 
     public bool NotificacionesActivas { get; set; } = true;
 
+    public bool NotificacionesSoloCriticas { get; set; } = false;
+
     public FormatoExportacion FormatoExportacionPreferido { get; set; } = FormatoExportacion.Csv;
 
     public TemaAplicacion Tema { get; set; } = TemaAplicacion.Sistema;

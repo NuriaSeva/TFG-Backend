@@ -160,6 +160,9 @@ namespace FinMind.Migrations
                     b.Property<bool>("NotificacionesActivas")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<bool>("NotificacionesSoloCriticas")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int>("TamanoTexto")
                         .HasColumnType("int");
 

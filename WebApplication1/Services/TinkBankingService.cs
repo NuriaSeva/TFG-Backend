@@ -202,10 +202,13 @@ public class TinkBankingService : ITinkBankingService
         var bic = account.AccountIdentifiers?.Iban?.Bic;
 
         var conexion = await _context.ConexionesBancarias
-            .FirstOrDefaultAsync(c =>
+            .Where(c =>
                 c.UsuarioId == usuarioId &&
                 c.Proveedor == ProveedorBancario.Tink &&
-                c.Estado != EstadoConexionBancaria.Desvinculada);
+                c.Estado != EstadoConexionBancaria.Desvinculada)
+            .OrderByDescending(c => c.Estado == EstadoConexionBancaria.Activa ? 1 : 0)
+            .ThenByDescending(c => c.FechaCreacion)
+            .FirstOrDefaultAsync();
 
         if (conexion == null)
         {
@@ -231,12 +234,10 @@ public class TinkBankingService : ITinkBankingService
             conexion.IdConexionExterna = reportId;
             conexion.FechaUltimaSincronizacion = DateTime.UtcNow;
         }
+        // El modelo actual de datos mantiene una sola cuenta por usuario (UsuarioId único),
+        // por lo que al reconectar debemos reutilizar ese registro aunque cambie el IBAN.
         var cuentaExistente = await _context.CuentasBancarias
-            .FirstOrDefaultAsync(c =>
-                c.UsuarioId == usuarioId &&
-                !string.IsNullOrWhiteSpace(c.Iban) &&
-                !string.IsNullOrWhiteSpace(iban) &&
-                c.Iban == iban);
+            .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId);
 
         if (cuentaExistente == null)
         {
@@ -265,6 +266,7 @@ public class TinkBankingService : ITinkBankingService
         else
         {
             cuentaExistente.ConexionBancariaId = conexion.Id;
+            cuentaExistente.IdCuentaExterna = account.Id;
             cuentaExistente.Nombre = !string.IsNullOrWhiteSpace(account.Name)
                 ? account.Name!
                 : cuentaExistente.Nombre;
@@ -394,9 +396,16 @@ public class TinkBankingService : ITinkBankingService
             throw new InvalidOperationException("Tink no devolvió access_token para transactions.");
 
         var conexion = await _context.ConexionesBancarias
-            .FirstOrDefaultAsync(c =>
+            .Where(c =>
                 c.UsuarioId == usuarioId &&
-                c.Proveedor == ProveedorBancario.Tink);
+                c.Proveedor == ProveedorBancario.Tink &&
+                (c.Estado == EstadoConexionBancaria.Activa || c.Estado == EstadoConexionBancaria.Expirada))
+            .OrderByDescending(c => c.Estado == EstadoConexionBancaria.Activa ? 1 : 0)
+            .ThenByDescending(c => c.FechaCreacion)
+            .FirstOrDefaultAsync();
+
+        if (conexion == null)
+            throw new InvalidOperationException("No existe conexión bancaria activa para el usuario.");
 
         conexion.AccessToken = accessToken;
         conexion.RefreshToken = refreshToken;
@@ -412,9 +421,13 @@ public class TinkBankingService : ITinkBankingService
             throw new ArgumentException("El usuarioId es obligatorio.", nameof(usuarioId));
 
         var conexion = await _context.ConexionesBancarias
-            .FirstOrDefaultAsync(c =>
+            .Where(c =>
                 c.UsuarioId == usuarioId &&
-                c.Proveedor == ProveedorBancario.Tink);
+                c.Proveedor == ProveedorBancario.Tink &&
+                (c.Estado == EstadoConexionBancaria.Activa || c.Estado == EstadoConexionBancaria.Expirada))
+            .OrderByDescending(c => c.Estado == EstadoConexionBancaria.Activa ? 1 : 0)
+            .ThenByDescending(c => c.FechaCreacion)
+            .FirstOrDefaultAsync();
 
         if (conexion == null)
             throw new InvalidOperationException("No existe conexión bancaria activa.");

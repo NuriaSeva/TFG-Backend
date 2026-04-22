@@ -67,6 +67,42 @@ public class AutenticacionController : ControllerBase
         }
     }
 
+    [HttpGet("perfil")]
+    [Authorize]
+    public async Task<IActionResult> ObtenerPerfil()
+    {
+        try
+        {
+            var usuarioId = ObtenerUsuarioId();
+            var perfil = await _usuariosServicio.ObtenerPerfilAsync(usuarioId);
+            return Ok(perfil);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { mensaje = ex.Message });
+        }
+    }
+
+    [HttpPut("perfil")]
+    [Authorize]
+    public async Task<IActionResult> ActualizarPerfil([FromBody] ActualizarPerfilUsuarioDto dto)
+    {
+        try
+        {
+            var usuarioId = ObtenerUsuarioId();
+            var perfilActualizado = await _usuariosServicio.ActualizarPerfilAsync(usuarioId, dto);
+            return Ok(perfilActualizado);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { mensaje = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+    }
+
     [HttpPost("cierre-sesion")]
     [Authorize]
     public IActionResult CierreSesion()

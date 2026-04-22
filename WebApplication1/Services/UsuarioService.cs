@@ -134,6 +134,74 @@ public class UsuarioService : IUsuarioService
         await _context.SaveChangesAsync();
     }
 
+    public async Task<PerfilUsuarioResponseDto> ObtenerPerfilAsync(Guid usuarioId)
+    {
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == usuarioId);
+
+        if (usuario is null)
+        {
+            throw new UnauthorizedAccessException("No se ha encontrado el usuario autenticado.");
+        }
+
+        return MapearPerfil(usuario);
+    }
+
+    public async Task<PerfilUsuarioResponseDto> ActualizarPerfilAsync(Guid usuarioId, ActualizarPerfilUsuarioDto dto)
+    {
+        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == usuarioId);
+
+        if (usuario is null)
+        {
+            throw new UnauthorizedAccessException("No se ha encontrado el usuario autenticado.");
+        }
+
+        var nombreNormalizado = (dto.Nombre ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(nombreNormalizado))
+        {
+            throw new InvalidOperationException("El nombre es obligatorio.");
+        }
+
+        if (nombreNormalizado.Length < 2)
+        {
+            throw new InvalidOperationException("El nombre debe tener al menos 2 caracteres.");
+        }
+
+        if (nombreNormalizado.Length > 80)
+        {
+            throw new InvalidOperationException("El nombre no puede superar los 80 caracteres.");
+        }
+
+        var apellidosNormalizados = string.IsNullOrWhiteSpace(dto.Apellidos)
+            ? null
+            : dto.Apellidos.Trim();
+
+        if (!string.IsNullOrEmpty(apellidosNormalizados) && apellidosNormalizados.Length > 120)
+        {
+            throw new InvalidOperationException("Los apellidos no pueden superar los 120 caracteres.");
+        }
+
+        var monedaNormalizada = (dto.MonedaPreferida ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(monedaNormalizada) || monedaNormalizada.Length != 3)
+        {
+            throw new InvalidOperationException("La moneda preferida debe ser un código de 3 letras.");
+        }
+
+        var idiomaNormalizado = (dto.Idioma ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(idiomaNormalizado) || idiomaNormalizado.Length < 2 || idiomaNormalizado.Length > 5)
+        {
+            throw new InvalidOperationException("El idioma debe tener entre 2 y 5 caracteres.");
+        }
+
+        usuario.Nombre = nombreNormalizado;
+        usuario.Apellidos = apellidosNormalizados;
+        usuario.MonedaPreferida = monedaNormalizada;
+        usuario.Idioma = idiomaNormalizado;
+
+        await _context.SaveChangesAsync();
+
+        return MapearPerfil(usuario);
+    }
+
     private static void ValidarPasswordSegura(string password)
     {
         var errores = new List<string>();
@@ -214,6 +282,18 @@ public class UsuarioService : IUsuarioService
             Email = usuario.Email,
             Token = token,
             ExpiracionToken = expiracion
+        };
+    }
+
+    private static PerfilUsuarioResponseDto MapearPerfil(Usuario usuario)
+    {
+        return new PerfilUsuarioResponseDto
+        {
+            Email = usuario.Email,
+            Nombre = usuario.Nombre,
+            Apellidos = usuario.Apellidos,
+            MonedaPreferida = usuario.MonedaPreferida,
+            Idioma = usuario.Idioma
         };
     }
 }

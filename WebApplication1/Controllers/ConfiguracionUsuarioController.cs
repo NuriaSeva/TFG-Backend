@@ -27,7 +27,8 @@ public class ConfiguracionUsuarioController : BaseController
 
         return Ok(new ConfiguracionUsuarioResponseDto
         {
-            NotificacionesActivas = configuracion.NotificacionesActivas
+            NotificacionesActivas = configuracion.NotificacionesActivas,
+            NotificacionesSoloCriticas = configuracion.NotificacionesSoloCriticas
         });
     }
 
@@ -39,13 +40,18 @@ public class ConfiguracionUsuarioController : BaseController
         var configuracion = await ObtenerOCrearConfiguracionAsync(usuarioId);
 
         configuracion.NotificacionesActivas = request.NotificacionesActivas;
+        if (request.NotificacionesSoloCriticas.HasValue)
+        {
+            configuracion.NotificacionesSoloCriticas = request.NotificacionesSoloCriticas.Value;
+        }
         configuracion.FechaActualizacion = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
         return Ok(new ConfiguracionUsuarioResponseDto
         {
-            NotificacionesActivas = configuracion.NotificacionesActivas
+            NotificacionesActivas = configuracion.NotificacionesActivas,
+            NotificacionesSoloCriticas = configuracion.NotificacionesSoloCriticas
         });
     }
 
@@ -62,6 +68,7 @@ public class ConfiguracionUsuarioController : BaseController
             Id = Guid.NewGuid(),
             UsuarioId = usuarioId,
             NotificacionesActivas = true,
+            NotificacionesSoloCriticas = false,
             FechaActualizacion = DateTime.UtcNow
         };
 

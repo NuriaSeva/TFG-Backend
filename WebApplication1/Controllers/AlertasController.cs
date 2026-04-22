@@ -45,6 +45,12 @@ public class AlertasController : BaseController
             .AsNoTracking()
             .Where(a => a.UsuarioId == usuarioId);
 
+        var soloCriticas = await SonNotificacionesSoloCriticasAsync(usuarioId);
+        if (soloCriticas)
+        {
+            query = query.Where(a => EsAlertaCritica(a.Tipo));
+        }
+
         var total = await query.CountAsync();
 
         var items = await query
@@ -83,7 +89,11 @@ public class AlertasController : BaseController
             return Ok(new { total = 0 });
         }
 
-        var total = await _context.Alertas.CountAsync(a => a.UsuarioId == usuarioId && !a.Leida);
+        var soloCriticas = await SonNotificacionesSoloCriticasAsync(usuarioId);
+        var total = await _context.Alertas.CountAsync(a =>
+            a.UsuarioId == usuarioId &&
+            !a.Leida &&
+            (!soloCriticas || EsAlertaCritica(a.Tipo)));
         return Ok(new { total });
     }
 
@@ -135,5 +145,21 @@ public class AlertasController : BaseController
             .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId);
 
         return configuracion?.NotificacionesActivas ?? true;
+    }
+
+    private async Task<bool> SonNotificacionesSoloCriticasAsync(Guid usuarioId)
+    {
+        var configuracion = await _context.ConfiguracionesUsuario
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.UsuarioId == usuarioId);
+
+        return configuracion?.NotificacionesSoloCriticas ?? false;
+    }
+
+    private static bool EsAlertaCritica(FinMind.Models.Enitdades.TipoAlerta tipo)
+    {
+        return tipo == FinMind.Models.Enitdades.TipoAlerta.Prediccion ||
+               tipo == FinMind.Models.Enitdades.TipoAlerta.PresupuestoSuperado ||
+               tipo == FinMind.Models.Enitdades.TipoAlerta.ErrorSincronizacion;
     }
 }

@@ -156,9 +156,13 @@ public class TransaccionesService : ITransaccionesService
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
         var conexion = await _context.ConexionesBancarias
-            .FirstOrDefaultAsync(c =>
+            .Where(c =>
                 c.UsuarioId == usuarioId &&
-                c.Proveedor == ProveedorBancario.Tink);
+                c.Proveedor == ProveedorBancario.Tink &&
+                (c.Estado == EstadoConexionBancaria.Activa || c.Estado == EstadoConexionBancaria.Expirada))
+            .OrderByDescending(c => c.Estado == EstadoConexionBancaria.Activa ? 1 : 0)
+            .ThenByDescending(c => c.FechaCreacion)
+            .FirstOrDefaultAsync();
 
         if (conexion == null)
             throw new InvalidOperationException("No existe una conexión bancaria activa para el usuario.");
@@ -495,7 +499,7 @@ public class TransaccionesService : ITransaccionesService
 
             var mejor = sugerencia.MejorSugerencia;
 
-            if (mejor?.CategoriaId.HasValue == true && !sugerencia.RequiereConfirmacion)
+            if (mejor?.CategoriaId.HasValue == true)
             {
                 transaccion.CategoriaId = mejor.CategoriaId.Value;
             }
