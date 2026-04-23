@@ -396,12 +396,6 @@ public class TransaccionesService : ITransaccionesService
         if (usuarioId == Guid.Empty)
             throw new ArgumentException("El id del usuario es obligatorio.", nameof(usuarioId));
 
-        if (request.Importe <= 0)
-            throw new ArgumentException("El importe debe ser mayor que cero.", nameof(request.Importe));
-
-        if (request.Tipo != 1 && request.Tipo != 2)
-            throw new ArgumentException("El tipo debe ser 1 (Ingreso) o 2 (Gasto).", nameof(request.Tipo));
-
         var usuarioExiste = await _context.Usuarios
             .AsNoTracking()
             .AnyAsync(u => u.Id == usuarioId);

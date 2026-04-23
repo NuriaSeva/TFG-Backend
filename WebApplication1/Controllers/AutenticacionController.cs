@@ -1,4 +1,4 @@
-﻿using FinMind.DTO.Autenticacion;
+using FinMind.DTO.Autenticacion;
 using FinMind.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,86 +21,43 @@ public class AutenticacionController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Registro([FromBody] RegistroUsuarioDto dto)
     {
-        try
-        {
-            var respuesta = await _usuariosServicio.RegistrarAsync(dto);
-            return Ok(respuesta);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { mensaje = ex.Message });
-        }
+        var respuesta = await _usuariosServicio.RegistrarAsync(dto);
+        return Ok(respuesta);
     }
 
     [HttpPost("inicio-sesion")]
     [AllowAnonymous]
     public async Task<IActionResult> InicioSesion([FromBody] InicioSesionDto dto)
     {
-        try
-        {
-            var respuesta = await _usuariosServicio.IniciarSesionAsync(dto);
-            return Ok(respuesta);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { mensaje = ex.Message });
-        }
+        var respuesta = await _usuariosServicio.IniciarSesionAsync(dto);
+        return Ok(respuesta);
     }
 
     [HttpPost("cambiar-password")]
     [Authorize]
     public async Task<IActionResult> CambiarPassword([FromBody] CambiarPasswordDto dto)
     {
-        try
-        {
-            var usuarioId = ObtenerUsuarioId();
-            await _usuariosServicio.CambiarPasswordAsync(usuarioId, dto);
-            return Ok(new { mensaje = "La contraseña se ha actualizado correctamente." });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { mensaje = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { mensaje = ex.Message });
-        }
+        var usuarioId = ObtenerUsuarioId();
+        await _usuariosServicio.CambiarPasswordAsync(usuarioId, dto);
+        return Ok(new { mensaje = "La contraseña se ha actualizado correctamente." });
     }
 
     [HttpGet("perfil")]
     [Authorize]
     public async Task<IActionResult> ObtenerPerfil()
     {
-        try
-        {
-            var usuarioId = ObtenerUsuarioId();
-            var perfil = await _usuariosServicio.ObtenerPerfilAsync(usuarioId);
-            return Ok(perfil);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { mensaje = ex.Message });
-        }
+        var usuarioId = ObtenerUsuarioId();
+        var perfil = await _usuariosServicio.ObtenerPerfilAsync(usuarioId);
+        return Ok(perfil);
     }
 
     [HttpPut("perfil")]
     [Authorize]
     public async Task<IActionResult> ActualizarPerfil([FromBody] ActualizarPerfilUsuarioDto dto)
     {
-        try
-        {
-            var usuarioId = ObtenerUsuarioId();
-            var perfilActualizado = await _usuariosServicio.ActualizarPerfilAsync(usuarioId, dto);
-            return Ok(perfilActualizado);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(new { mensaje = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { mensaje = ex.Message });
-        }
+        var usuarioId = ObtenerUsuarioId();
+        var perfilActualizado = await _usuariosServicio.ActualizarPerfilAsync(usuarioId, dto);
+        return Ok(perfilActualizado);
     }
 
     [HttpPost("cierre-sesion")]

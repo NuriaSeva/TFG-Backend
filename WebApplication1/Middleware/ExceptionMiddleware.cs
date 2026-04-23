@@ -1,6 +1,7 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json;
 using FinMind.Common.Exceptions;
+using Microsoft.EntityFrameworkCore;
 
 namespace FinMind.Middleware;
 
@@ -23,27 +24,50 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Se ha producido una excepción no controlada.");
+            var (statusCode, errorCode) = ResolverError(ex);
+
+            if ((int)statusCode >= 500)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error no controlado ({ErrorCode}) en {Method} {Path}. TraceId={TraceId}",
+                    errorCode,
+                    context.Request.Method,
+                    context.Request.Path,
+                    context.TraceIdentifier);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Error de negocio ({ErrorCode}) en {Method} {Path}. TraceId={TraceId}",
+                    errorCode,
+                    context.Request.Method,
+                    context.Request.Path,
+                    context.TraceIdentifier);
+            }
+
             await ManejarExcepcionAsync(context, ex);
         }
     }
 
     private static Task ManejarExcepcionAsync(HttpContext context, Exception ex)
     {
-        var statusCode = ex switch
-        {
-            NotFoundException => HttpStatusCode.NotFound,
-            BadRequestException => HttpStatusCode.BadRequest,
-            _ => HttpStatusCode.InternalServerError
-        };
+        var (statusCode, errorCode) = ResolverError(ex);
+        var esErrorInterno = statusCode == HttpStatusCode.InternalServerError;
 
         var respuesta = new
         {
             error = true,
-            mensaje = ex.Message,
-            detalle = statusCode == HttpStatusCode.InternalServerError
+            codigo = errorCode,
+            status = (int)statusCode,
+            mensaje = esErrorInterno
                 ? "Se ha producido un error interno en el servidor."
-                : null
+                : ex.Message,
+            detalle = esErrorInterno
+                ? "Contacta con soporte indicando el traceId."
+                : null,
+            traceId = context.TraceIdentifier
         };
 
         var json = JsonSerializer.Serialize(respuesta);
@@ -52,5 +76,20 @@ public class ExceptionMiddleware
         context.Response.StatusCode = (int)statusCode;
 
         return context.Response.WriteAsync(json);
+    }
+
+    private static (HttpStatusCode statusCode, string errorCode) ResolverError(Exception ex)
+    {
+        return ex switch
+        {
+            NotFoundException => (HttpStatusCode.NotFound, "not_found"),
+            BadRequestException => (HttpStatusCode.BadRequest, "bad_request"),
+            UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "unauthorized"),
+            ArgumentOutOfRangeException => (HttpStatusCode.BadRequest, "validation_error"),
+            ArgumentException => (HttpStatusCode.BadRequest, "validation_error"),
+            InvalidOperationException => (HttpStatusCode.BadRequest, "invalid_operation"),
+            DbUpdateException => (HttpStatusCode.Conflict, "db_conflict"),
+            _ => (HttpStatusCode.InternalServerError, "internal_error")
+        };
     }
 }

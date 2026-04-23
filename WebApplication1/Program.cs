@@ -12,52 +12,81 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
 
-var corsPolicy = "AllowIonicApp";
+const string corsPolicy = "AllowIonicApp";
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(corsPolicy, policy =>
     {
         policy
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowAnyOrigin();
+            .WithOrigins(
+                "capacitor://localhost",
+                "ionic://localhost",
+                "http://localhost",
+                "http://127.0.0.1")
+            .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            .WithHeaders("Authorization", "Content-Type");
     });
 });
+
 var jwtOptions = builder.Configuration
     .GetSection("Jwt")
-    .Get<JwtOptions>() ?? throw new InvalidOperationException("No se ha configurado Jwt");
+    .Get<JwtOptions>();
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                      ?? throw new InvalidOperationException("No se encontró la cadena de conexión");
+if (jwtOptions is null && builder.Environment.IsEnvironment("Testing"))
+{
+    jwtOptions = new JwtOptions
+    {
+        Key = "ClaveSuperSeguraDePruebas123!ClaveSuperSegura",
+        Issuer = "FinMind.Tests",
+        Audience = "FinMind.Tests",
+        ExpirationMinutes = 60
+    };
+}
 
-builder.Services.AddDbContext<FinMindDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+if (jwtOptions is null)
+{
+    throw new InvalidOperationException("No se ha configurado Jwt");
+}
+
+if (builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddDbContext<FinMindDbContext>(options =>
+        options.UseInMemoryDatabase("FinMindTests"));
+}
+else
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+                          ?? throw new InvalidOperationException("No se encontró la cadena de conexión");
+
+    builder.Services.AddDbContext<FinMindDbContext>(options =>
+        options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+}
+
 builder.Services.AddControllers();
-
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.Configure<TinkOptions>(
-    builder.Configuration.GetSection("Tink"));
-builder.Services.Configure<IAOptions>(
-    builder.Configuration.GetSection("IA"));
+
+builder.Services.Configure<TinkOptions>(builder.Configuration.GetSection("Tink"));
+builder.Services.Configure<IAOptions>(builder.Configuration.GetSection("IA"));
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddHttpClient<ITinkBankingService, TinkBankingService>();
-
 builder.Services.AddHttpClient<ICategoriaSeedService, CategoriaSeedService>();
 
 builder.Services.AddScoped<ITransaccionesService, TransaccionesService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IAnaliticaPredictivaService, AnaliticaPredictivaService>();
 builder.Services.AddScoped<IIAFinanzasService, IAFinanzasService>();
-
+builder.Services.AddScoped<ICategoriasService, CategoriasService>();
+builder.Services.AddScoped<IAlertasService, AlertasService>();
+builder.Services.AddScoped<IConfiguracionUsuarioService, ConfiguracionUsuarioService>();
+builder.Services.AddScoped<ICuentasBancariasService, CuentasBancariasService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
+
 builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
-builder.Services.Configure<JwtOptions>(
-    builder.Configuration.GetSection("Jwt"));
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -104,49 +133,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtOptions.Issuer,
             ValidAudience = jwtOptions.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtOptions.Key))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key))
         };
 
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                Console.WriteLine($"JWT MESSAGE RECEIVED => {context.Request.Method} {context.Request.Path}");
-                Console.WriteLine($"Authorization header => {context.Request.Headers.Authorization}");
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = context =>
-            {
-                Console.WriteLine($"JWT TOKEN VALIDADO => {context.Request.Method} {context.Request.Path}");
-                return Task.CompletedTask;
-            },
-            OnAuthenticationFailed = context =>
-            {
-                Console.WriteLine($"JWT ERROR => {context.Request.Method} {context.Request.Path}");
-                Console.WriteLine(context.Exception.Message);
-                return Task.CompletedTask;
-            },
-            OnChallenge = context =>
-            {
-                Console.WriteLine($"JWT CHALLENGE => {context.Request.Method} {context.Request.Path}");
-                Console.WriteLine($"Error: {context.Error}");
-                Console.WriteLine($"Description: {context.ErrorDescription}");
-                return Task.CompletedTask;
-            }
-        };
+        options.Events = new JwtBearerEvents();
     });
 
 builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 app.UseCors(corsPolicy);
-// Configure the HTTP request pipeline.
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
 app.UseMiddleware<ExceptionMiddleware>();
 
 if (!app.Environment.IsDevelopment())
@@ -155,6 +159,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.MapGet("/", () => "FinMind API funcionando correctamente");
+
 app.MapGet("/health/db", async (FinMindDbContext db) =>
 {
     try
@@ -186,7 +191,8 @@ app.MapGet("/health/db", async (FinMindDbContext db) =>
 
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

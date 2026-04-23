@@ -3,11 +3,13 @@ using FinMind.DTO;
 using FinMind.DTO.Banking;
 using FinMind.Interfaces;
 using FinMind.Models.Enitdades;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Collections.Generic;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace FinMind.Services;
@@ -17,9 +19,7 @@ public class TinkBankingService : ITinkBankingService
     private readonly HttpClient _httpClient;
     private readonly FinMindDbContext _context;
     private readonly TinkOptions _options;
-
-    // Compatibilidad temporal con el flujo antiguo OAuth
-    private static readonly Dictionary<string, string> _tokens = new();
+    private readonly IDataProtector _tokenProtector;
 
     // Guardamos el último callback de Account Check por usuario local
     private static readonly Dictionary<string, AccountCheckCallbackResultDto> _accountCheckResults = new();
@@ -27,11 +27,13 @@ public class TinkBankingService : ITinkBankingService
     public TinkBankingService(
         HttpClient httpClient,
         FinMindDbContext context,
-        IOptions<TinkOptions> options)
+        IOptions<TinkOptions> options,
+        IDataProtectionProvider dataProtectionProvider)
     {
         _httpClient = httpClient;
         _context = context;
         _options = options.Value;
+        _tokenProtector = dataProtectionProvider.CreateProtector("FinMind.TokensBancarios.v1");
     }
 
     public Task<object> GetLoginUrlAsync(string localUserId)
@@ -407,8 +409,8 @@ public class TinkBankingService : ITinkBankingService
         if (conexion == null)
             throw new InvalidOperationException("No existe conexión bancaria activa para el usuario.");
 
-        conexion.AccessToken = accessToken;
-        conexion.RefreshToken = refreshToken;
+        conexion.AccessToken = ProtegerToken(accessToken);
+        conexion.RefreshToken = ProtegerTokenOpcional(refreshToken);
         conexion.FechaExpiracionToken = expiresIn > 0
             ? DateTime.UtcNow.AddSeconds(expiresIn - 60)
             : null;
@@ -432,13 +434,15 @@ public class TinkBankingService : ITinkBankingService
         if (conexion == null)
             throw new InvalidOperationException("No existe conexión bancaria activa.");
 
-        if (!string.IsNullOrWhiteSpace(conexion.AccessToken) &&
+        var accessTokenActual = DesprotegerTokenOpcional(conexion.AccessToken);
+        if (!string.IsNullOrWhiteSpace(accessTokenActual) &&
             (!conexion.FechaExpiracionToken.HasValue || conexion.FechaExpiracionToken > DateTime.UtcNow))
         {
-            return conexion.AccessToken!;
+            return accessTokenActual!;
         }
 
-        if (string.IsNullOrWhiteSpace(conexion.RefreshToken))
+        var refreshTokenActual = DesprotegerTokenOpcional(conexion.RefreshToken);
+        if (string.IsNullOrWhiteSpace(refreshTokenActual))
         {
             conexion.Estado = EstadoConexionBancaria.Expirada;
             conexion.AccessToken = null;
@@ -457,7 +461,7 @@ public class TinkBankingService : ITinkBankingService
             ["client_id"] = _options.ClientId,
             ["client_secret"] = _options.ClientSecret,
             ["grant_type"] = "refresh_token",
-            ["refresh_token"] = conexion.RefreshToken
+            ["refresh_token"] = refreshTokenActual
         };
 
         using var response = await _httpClient.PostAsync(
@@ -482,9 +486,9 @@ public class TinkBankingService : ITinkBankingService
         using var doc = JsonDocument.Parse(rawJson);
 
         var newAccessToken = doc.RootElement.GetProperty("access_token").GetString();
-        var newRefreshToken = doc.RootElement.TryGetProperty("refresh_token", out var refreshTokenProp)
+        var newRefreshTokenPlano = doc.RootElement.TryGetProperty("refresh_token", out var refreshTokenProp)
             ? refreshTokenProp.GetString()
-            : conexion.RefreshToken;
+            : refreshTokenActual;
         var expiresIn = doc.RootElement.TryGetProperty("expires_in", out var expiresInProp)
             ? expiresInProp.GetInt32()
             : 0;
@@ -492,8 +496,8 @@ public class TinkBankingService : ITinkBankingService
         if (string.IsNullOrWhiteSpace(newAccessToken))
             throw new InvalidOperationException("Tink no devolvió un nuevo access_token.");
 
-        conexion.AccessToken = newAccessToken;
-        conexion.RefreshToken = newRefreshToken;
+        conexion.AccessToken = ProtegerToken(newAccessToken);
+        conexion.RefreshToken = ProtegerTokenOpcional(newRefreshTokenPlano);
         conexion.FechaExpiracionToken = expiresIn > 0
             ? DateTime.UtcNow.AddSeconds(expiresIn - 60)
             : null;
@@ -633,4 +637,35 @@ public class TinkBankingService : ITinkBankingService
         await _context.SaveChangesAsync();
     }
 
+    private string ProtegerToken(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            throw new ArgumentException("El token no puede ser vacío.", nameof(token));
+
+        return _tokenProtector.Protect(token);
+    }
+
+    private string? ProtegerTokenOpcional(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        return _tokenProtector.Protect(token);
+    }
+
+    private string? DesprotegerTokenOpcional(string? tokenProtegido)
+    {
+        if (string.IsNullOrWhiteSpace(tokenProtegido))
+            return null;
+
+        try
+        {
+            return _tokenProtector.Unprotect(tokenProtegido);
+        }
+        catch (CryptographicException)
+        {
+            // Compatibilidad con registros antiguos sin cifrar.
+            return tokenProtegido;
+        }
+    }
 }

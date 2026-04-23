@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using FinMind.Common.Exceptions;
 using FinMind.Data;
@@ -40,8 +40,7 @@ public class IAFinanzasService : IIAFinanzasService
 
     private static readonly KeywordRule[] KeywordRules =
     {
-        // Priorizamos "supermercado" para evitar que acabe en categorías amplias
-        // como "comida y bebida" cuando ambas existen.
+  
         new("mercadona", new[] { "supermercado" }, 0.95m),
         new("carrefour", new[] { "supermercado" }, 0.95m),
         new("lidl", new[] { "supermercado" }, 0.95m),
@@ -86,7 +85,7 @@ public class IAFinanzasService : IIAFinanzasService
     public async Task<EntrenamientoModeloCategoriasResponseDto> EntrenarModeloCategoriasAsync(bool forzar = false, CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled)
-            throw new BadRequestException("Las recomendaciones autom�ticas est�n desactivadas en este momento.");
+            throw new BadRequestException("Las recomendaciones automáticas están desactivadas en este momento.");
 
         var datasetPath = ResolverRuta(_options.DatasetPath);
         var modelDir = ResolverRuta(_options.ModelOutputPath);
@@ -202,7 +201,7 @@ public class IAFinanzasService : IIAFinanzasService
     public async Task<SugerenciaCategoriaResponseDto> SugerirCategoriaAsync(SugerenciaCategoriaRequestDto request, CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled)
-            throw new BadRequestException("Las recomendaciones autom�ticas est�n desactivadas en este momento.");
+            throw new BadRequestException("Las recomendaciones automáticas están desactivadas en este momento.");
 
         if (string.IsNullOrWhiteSpace(request.Descripcion))
             throw new BadRequestException("La descripción es obligatoria para sugerir categoría.");
@@ -261,7 +260,7 @@ public class IAFinanzasService : IIAFinanzasService
         try
         {
             if (_modelo == null)
-                throw new InvalidOperationException("Ahora mismo no podemos recomendar una categor�a.");
+                throw new InvalidOperationException("Ahora mismo no podemos recomendar una categoría.");
 
             modeloActual = _modelo;
             etiquetas = _etiquetasOrdenadas;
@@ -890,4 +889,6 @@ public class IAFinanzasService : IIAFinanzasService
 
     private sealed record KeywordRule(string Keyword, string[] CategoryHints, decimal Weight);
 }
+
+
 

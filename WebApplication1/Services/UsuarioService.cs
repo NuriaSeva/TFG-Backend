@@ -31,8 +31,6 @@ public class UsuarioService : IUsuarioService
 
     public async Task<AutenticacionResponseDto> RegistrarAsync(RegistroUsuarioDto dto)
     {
-        ValidarPasswordSegura(dto.Password);
-
         var emailNormalizado = dto.Email.Trim().ToLowerInvariant();
 
         var existeUsuario = await _context.Usuarios
@@ -103,16 +101,6 @@ public class UsuarioService : IUsuarioService
             throw new UnauthorizedAccessException("No se ha encontrado el usuario autenticado.");
         }
 
-        if (string.IsNullOrWhiteSpace(dto.PasswordActual))
-        {
-            throw new InvalidOperationException("Debes indicar la contraseña actual.");
-        }
-
-        if (string.IsNullOrWhiteSpace(dto.PasswordNueva))
-        {
-            throw new InvalidOperationException("Debes indicar la nueva contraseña.");
-        }
-
         var resultadoPasswordActual = _passwordHasher.VerifyHashedPassword(usuario, usuario.PasswordHash, dto.PasswordActual);
 
         if (resultadoPasswordActual == PasswordVerificationResult.Failed)
@@ -125,8 +113,6 @@ public class UsuarioService : IUsuarioService
         {
             throw new InvalidOperationException("La nueva contraseña no puede ser igual a la actual.");
         }
-
-        ValidarPasswordSegura(dto.PasswordNueva);
 
         usuario.PasswordHash = _passwordHasher.HashPassword(usuario, dto.PasswordNueva);
         usuario.FechaCambioPassword = DateTime.UtcNow;
@@ -155,42 +141,13 @@ public class UsuarioService : IUsuarioService
             throw new UnauthorizedAccessException("No se ha encontrado el usuario autenticado.");
         }
 
-        var nombreNormalizado = (dto.Nombre ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(nombreNormalizado))
-        {
-            throw new InvalidOperationException("El nombre es obligatorio.");
-        }
-
-        if (nombreNormalizado.Length < 2)
-        {
-            throw new InvalidOperationException("El nombre debe tener al menos 2 caracteres.");
-        }
-
-        if (nombreNormalizado.Length > 80)
-        {
-            throw new InvalidOperationException("El nombre no puede superar los 80 caracteres.");
-        }
+        var nombreNormalizado = dto.Nombre.Trim();
 
         var apellidosNormalizados = string.IsNullOrWhiteSpace(dto.Apellidos)
             ? null
             : dto.Apellidos.Trim();
-
-        if (!string.IsNullOrEmpty(apellidosNormalizados) && apellidosNormalizados.Length > 120)
-        {
-            throw new InvalidOperationException("Los apellidos no pueden superar los 120 caracteres.");
-        }
-
-        var monedaNormalizada = (dto.MonedaPreferida ?? string.Empty).Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(monedaNormalizada) || monedaNormalizada.Length != 3)
-        {
-            throw new InvalidOperationException("La moneda preferida debe ser un código de 3 letras.");
-        }
-
-        var idiomaNormalizado = (dto.Idioma ?? string.Empty).Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(idiomaNormalizado) || idiomaNormalizado.Length < 2 || idiomaNormalizado.Length > 5)
-        {
-            throw new InvalidOperationException("El idioma debe tener entre 2 y 5 caracteres.");
-        }
+        var monedaNormalizada = dto.MonedaPreferida.Trim().ToUpperInvariant();
+        var idiomaNormalizado = dto.Idioma.Trim().ToLowerInvariant();
 
         usuario.Nombre = nombreNormalizado;
         usuario.Apellidos = apellidosNormalizados;
@@ -200,38 +157,6 @@ public class UsuarioService : IUsuarioService
         await _context.SaveChangesAsync();
 
         return MapearPerfil(usuario);
-    }
-
-    private static void ValidarPasswordSegura(string password)
-    {
-        var errores = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            errores.Add("La contraseña es obligatoria.");
-        }
-        else
-        {
-            if (password.Length < 8)
-                errores.Add("Debe tener al menos 8 caracteres.");
-
-            if (!password.Any(char.IsUpper))
-                errores.Add("Debe incluir al menos una letra mayúscula.");
-
-            if (!password.Any(char.IsLower))
-                errores.Add("Debe incluir al menos una letra minúscula.");
-
-            if (!password.Any(char.IsDigit))
-                errores.Add("Debe incluir al menos un número.");
-
-            if (!password.Any(c => !char.IsLetterOrDigit(c)))
-                errores.Add("Debe incluir al menos un carácter especial.");
-        }
-
-        if (errores.Count > 0)
-        {
-            throw new InvalidOperationException("La contraseña no cumple los requisitos de seguridad: " + string.Join(" ", errores));
-        }
     }
 
     private AutenticacionResponseDto GenerarRespuestaAutenticacion(Usuario usuario)
