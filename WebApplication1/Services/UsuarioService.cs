@@ -50,6 +50,8 @@ public class UsuarioService : IUsuarioService
             MonedaPreferida = "EUR",
             Idioma = "es",
             Activo = true,
+            Rol = RolesSistema.Usuario,
+            DebeCambiarPassword = false,
             FechaCreacion = DateTime.UtcNow,
             FechaCambioPassword = DateTime.UtcNow
         };
@@ -116,6 +118,7 @@ public class UsuarioService : IUsuarioService
 
         usuario.PasswordHash = _passwordHasher.HashPassword(usuario, dto.PasswordNueva);
         usuario.FechaCambioPassword = DateTime.UtcNow;
+        usuario.DebeCambiarPassword = false;
 
         await _context.SaveChangesAsync();
     }
@@ -162,6 +165,7 @@ public class UsuarioService : IUsuarioService
     private AutenticacionResponseDto GenerarRespuestaAutenticacion(Usuario usuario)
     {
         var expiracion = DateTime.UtcNow.AddMinutes(_jwtOptions.ExpirationMinutes);
+        var rolUsuario = string.IsNullOrWhiteSpace(usuario.Rol) ? RolesSistema.Usuario : usuario.Rol;
 
         if (string.IsNullOrWhiteSpace(_jwtOptions.Key))
         {
@@ -184,6 +188,9 @@ public class UsuarioService : IUsuarioService
             new Claim(JwtRegisteredClaimNames.Email, usuario.Email),
             new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
             new Claim(ClaimTypes.Name, usuario.Nombre),
+            new Claim(ClaimTypes.Role, rolUsuario),
+            new Claim("role", rolUsuario),
+            new Claim("must_change_password", usuario.DebeCambiarPassword ? "true" : "false"),
             new Claim("email", usuario.Email)
         };
 
@@ -205,6 +212,8 @@ public class UsuarioService : IUsuarioService
             UsuarioId = usuario.Id,
             Nombre = usuario.Nombre,
             Email = usuario.Email,
+            Rol = rolUsuario,
+            DebeCambiarPassword = usuario.DebeCambiarPassword,
             Token = token,
             ExpiracionToken = expiracion
         };
@@ -218,7 +227,8 @@ public class UsuarioService : IUsuarioService
             Nombre = usuario.Nombre,
             Apellidos = usuario.Apellidos,
             MonedaPreferida = usuario.MonedaPreferida,
-            Idioma = usuario.Idioma
+            Idioma = usuario.Idioma,
+            Rol = string.IsNullOrWhiteSpace(usuario.Rol) ? RolesSistema.Usuario : usuario.Rol
         };
     }
 }

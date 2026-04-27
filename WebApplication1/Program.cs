@@ -190,6 +190,59 @@ app.MapGet("/health/db", async (FinMindDbContext db) =>
 });
 
 app.UseAuthentication();
+
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var path = context.Request.Path.Value ?? string.Empty;
+        var esCierreSesion = path.Equals("/api/autenticacion/cierre-sesion", StringComparison.OrdinalIgnoreCase);
+        var esCambioPassword = path.Equals("/api/autenticacion/cambiar-password", StringComparison.OrdinalIgnoreCase);
+        var requiereCambioPassword = string.Equals(
+            context.User.FindFirst("must_change_password")?.Value,
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
+        if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) &&
+            requiereCambioPassword &&
+            !esCambioPassword &&
+            !esCierreSesion)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = true,
+                codigo = "password_change_required",
+                status = 403,
+                mensaje = "Debes cambiar tu contraseña temporal antes de continuar."
+            });
+            return;
+        }
+
+        var esEndpointAdmin = path.StartsWith("/api/admin", StringComparison.OrdinalIgnoreCase);
+
+        if (context.User.IsInRole(RolesSistema.Admin) &&
+            path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) &&
+            !esEndpointAdmin &&
+            !esCierreSesion)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = true,
+                codigo = "admin_scope_restriction",
+                status = 403,
+                mensaje = "El usuario administrador solo puede acceder al panel de administracion."
+            });
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.UseAuthorization();
 app.MapControllers();
 

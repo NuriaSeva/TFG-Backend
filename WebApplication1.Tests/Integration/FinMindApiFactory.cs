@@ -10,6 +10,8 @@ namespace FinMind.Tests.Integration;
 
 public sealed class FinMindApiFactory : WebApplicationFactory<Program>
 {
+    private readonly string _databaseName = $"FinMindTests-{Guid.NewGuid()}";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -31,7 +33,7 @@ public sealed class FinMindApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<DbContextOptions<FinMindDbContext>>();
             services.AddDbContext<FinMindDbContext>(options =>
-                options.UseInMemoryDatabase($"FinMindTests-{Guid.NewGuid()}"));
+                options.UseInMemoryDatabase(_databaseName));
 
             using var scope = services.BuildServiceProvider().CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<FinMindDbContext>();

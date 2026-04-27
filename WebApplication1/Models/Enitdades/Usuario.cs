@@ -17,6 +17,8 @@ public class Usuario
     public string Idioma { get; set; } = "es";
 
     public bool Activo { get; set; } = true;
+    public string Rol { get; set; } = FinMind.Models.RolesSistema.Usuario;
+    public bool DebeCambiarPassword { get; set; } = false;
 
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 

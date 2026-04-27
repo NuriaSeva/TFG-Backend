@@ -7,4 +7,5 @@ public class PerfilUsuarioResponseDto
     public string? Apellidos { get; set; }
     public string MonedaPreferida { get; set; } = "EUR";
     public string Idioma { get; set; } = "es";
+    public string Rol { get; set; } = string.Empty;
 }

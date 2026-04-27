@@ -66,6 +66,15 @@ public class FinMindDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(10);
 
+            entity.Property(e => e.Rol)
+                .IsRequired()
+                .HasMaxLength(20)
+                .HasDefaultValue(FinMind.Models.RolesSistema.Usuario);
+
+            entity.Property(e => e.DebeCambiarPassword)
+                .IsRequired()
+                .HasDefaultValue(false);
+
             entity.HasIndex(e => e.Email)
                 .IsUnique();
         });
