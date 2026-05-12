@@ -1,10 +1,31 @@
 using FinMind.DTO.Dashboard;
 using FinMind.Interfaces;
+using FinMind.Models;
+using Microsoft.Extensions.Options;
+using Microsoft.ML;
+using Microsoft.ML.Data;
 
 namespace FinMind.Services;
 
 public class AnaliticaPredictivaService : IAnaliticaPredictivaService
 {
+    private readonly string? _contentRootPath;
+    private readonly IAOptions _options;
+    private readonly MLContext _mlContext = new(seed: 12);
+    private readonly SemaphoreSlim _modeloPrediccionSemaphore = new(1, 1);
+    private ITransformer? _modeloPrediccionGasto;
+
+    public AnaliticaPredictivaService()
+    {
+        _options = new IAOptions();
+    }
+
+    public AnaliticaPredictivaService(IWebHostEnvironment environment, IOptions<IAOptions> options)
+    {
+        _contentRootPath = environment.ContentRootPath;
+        _options = options.Value;
+    }
+
     public List<DashboardAlertaProactivaDto> GenerarAlertasProactivas(
         DashboardResumenDto resumen,
         List<DashboardCategoriaGastoDto> distribucion,
@@ -18,10 +39,6 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
         var hoy = DateTime.Today;
         var esMesActual = hoy.Month == mes && hoy.Year == anio;
 
-        var gastoProyectadoRegresion = esMesActual
-            ? CalcularPrediccionGastoFinMesRegresion(gastosMesActualDetalle, anio, mes, hoy.Day)
-            : null;
-
         var mesActualSerie = evolucion
             .FirstOrDefault(e => e.Mes == mes && e.Anio == anio);
 
@@ -30,6 +47,8 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
             .TakeLast(3)
             .ToList();
 
+        decimal? gastoProyectadoModelo = null;
+
         if (esMesActual && mesActualSerie != null && historico3.Count >= 3)
         {
             var mediaGasto3Meses = historico3.Average(e => e.Gastos);
@@ -37,19 +56,28 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
             {
                 var diasMes = DateTime.DaysInMonth(anio, mes);
                 var diaActual = Math.Min(hoy.Day, diasMes);
-                var gastoProyectado = gastoProyectadoRegresion
-                    ?? (mesActualSerie.Gastos / Math.Max(diaActual, 1)) * diasMes;
+                gastoProyectadoModelo = PredecirGastoCierreConModelo(
+                    diaActual,
+                    diasMes,
+                    mesActualSerie.Gastos,
+                    resumen.IngresosMes,
+                    mediaGasto3Meses,
+                    mes);
+                if (!gastoProyectadoModelo.HasValue)
+                    return AgregarAlertasNoPredictivas(alertas, resumen, distribucion, gastosMesActualDetalle, gastoCategoriaMensual, mes, anio);
+
+                var gastoProyectado = gastoProyectadoModelo.Value;
 
                 var incremento = ((gastoProyectado / mediaGasto3Meses) - 1m) * 100m;
 
-                if (gastoProyectadoRegresion.HasValue && gastoProyectadoRegresion.Value >= resumen.GastosMes * 1.08m)
+                if (gastoProyectado >= resumen.GastosMes * 1.08m)
                 {
                     alertas.Add(new DashboardAlertaProactivaDto
                     {
                         Tipo = "prediccion",
                         Severidad = incremento >= 30m ? "alta" : "media",
                         Titulo = "Predicción de cierre de gasto",
-                        Mensaje = $"Con tu tendencia actual, el gasto estimado al cierre del mes es de {Math.Round(gastoProyectadoRegresion.Value, 2):N2} EUR."
+                        Mensaje = $"Segun tu tendencia actual y tu historial reciente, el gasto estimado al cierre del mes es de {Math.Round(gastoProyectado, 2):N2} EUR."
                     });
                 }
 
@@ -68,10 +96,13 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
 
         if (esMesActual && resumen.IngresosMes > 0)
         {
-            var gastosReferenciaRiesgo = gastoProyectadoRegresion ?? resumen.GastosMes;
-            if (gastosReferenciaRiesgo > resumen.IngresosMes * 1.10m)
+            var gastosReferenciaRiesgo = gastoProyectadoModelo;
+            if (!gastosReferenciaRiesgo.HasValue)
+                return AgregarAlertasNoPredictivas(alertas, resumen, distribucion, gastosMesActualDetalle, gastoCategoriaMensual, mes, anio);
+
+            if (gastosReferenciaRiesgo.Value > resumen.IngresosMes * 1.10m)
             {
-                var exceso = gastosReferenciaRiesgo - resumen.IngresosMes;
+                var exceso = gastosReferenciaRiesgo.Value - resumen.IngresosMes;
                 alertas.Add(new DashboardAlertaProactivaDto
                 {
                     Tipo = "prediccion",
@@ -82,6 +113,18 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
             }
         }
 
+        return AgregarAlertasNoPredictivas(alertas, resumen, distribucion, gastosMesActualDetalle, gastoCategoriaMensual, mes, anio);
+    }
+
+    private static List<DashboardAlertaProactivaDto> AgregarAlertasNoPredictivas(
+        List<DashboardAlertaProactivaDto> alertas,
+        DashboardResumenDto resumen,
+        List<DashboardCategoriaGastoDto> distribucion,
+        List<DashboardGastoDiaAnaliticaDto> gastosMesActualDetalle,
+        List<DashboardGastoCategoriaMesAnaliticaDto> gastoCategoriaMensual,
+        int mes,
+        int anio)
+    {
         var categoriaPrincipal = distribucion
             .OrderByDescending(d => d.Porcentaje)
             .FirstOrDefault();
@@ -104,56 +147,99 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
         return alertas;
     }
 
-    private static decimal? CalcularPrediccionGastoFinMesRegresion(
-        List<DashboardGastoDiaAnaliticaDto> gastosMesActualDetalle,
-        int anio,
-        int mes,
-        int diaActual)
+    private decimal? PredecirGastoCierreConModelo(
+        int diaActual,
+        int diasMes,
+        decimal gastoAcumulado,
+        decimal ingresosMes,
+        decimal mediaHistorica3Meses,
+        int mes)
     {
-        if (gastosMesActualDetalle.Count == 0)
+        if (!_options.Enabled)
             return null;
 
-        var diasMes = DateTime.DaysInMonth(anio, mes);
-        var ultimoDiaConDatos = Math.Min(Math.Max(diaActual, 1), diasMes);
+        var modelo = ObtenerModeloPrediccionGasto();
+        if (modelo == null)
+            return null;
 
-        var gastoPorDia = gastosMesActualDetalle
-            .GroupBy(x => x.Fecha.Day)
-            .ToDictionary(g => g.Key, g => g.Sum(x => x.Importe));
+        var input = CrearInputPrediccionGasto(
+            diaActual,
+            diasMes,
+            gastoAcumulado,
+            ingresosMes,
+            mediaHistorica3Meses,
+            mes);
 
-        var x = new List<double>();
-        var y = new List<double>();
-        decimal acumulado = 0m;
+        var engine = _mlContext.Model.CreatePredictionEngine<PrediccionGastoTrainingInput, PrediccionGastoPrediction>(modelo);
+        var output = engine.Predict(input);
+        if (float.IsNaN(output.Score) || float.IsInfinity(output.Score) || output.Score <= 0)
+            return null;
 
-        for (var dia = 1; dia <= ultimoDiaConDatos; dia++)
+        var prediccion = Math.Max((decimal)output.Score, gastoAcumulado);
+        return Math.Round(prediccion, 2);
+    }
+
+    private ITransformer? ObtenerModeloPrediccionGasto()
+    {
+        if (_modeloPrediccionGasto != null)
+            return _modeloPrediccionGasto;
+
+        _modeloPrediccionSemaphore.Wait();
+        try
         {
-            acumulado += gastoPorDia.TryGetValue(dia, out var gastoDia) ? gastoDia : 0m;
-            x.Add(dia);
-            y.Add((double)acumulado);
+            if (_modeloPrediccionGasto != null)
+                return _modeloPrediccionGasto;
+
+            var modelPath = ResolverRuta(Path.Combine(_options.ModelOutputPath, _options.PrediccionGastoModelFileName));
+            if (File.Exists(modelPath))
+            {
+                using var stream = File.OpenRead(modelPath);
+                _modeloPrediccionGasto = _mlContext.Model.Load(stream, out _);
+                return _modeloPrediccionGasto;
+            }
+
+            return null;
         }
-
-        if (x.Count < 7)
+        catch
+        {
             return null;
+        }
+        finally
+        {
+            _modeloPrediccionSemaphore.Release();
+        }
+    }
 
-        var n = x.Count;
-        var sumaX = x.Sum();
-        var sumaY = y.Sum();
-        var sumaXY = x.Zip(y, (xi, yi) => xi * yi).Sum();
-        var sumaXX = x.Sum(v => v * v);
+    private static PrediccionGastoTrainingInput CrearInputPrediccionGasto(
+        int diaActual,
+        int diasMes,
+        decimal gastoAcumulado,
+        decimal ingresosMes,
+        decimal mediaHistorica3Meses,
+        int mes)
+    {
+        var diasSeguros = Math.Max(diasMes, 1);
+        var diaSeguro = Math.Clamp(diaActual, 1, diasSeguros);
 
-        var denominador = (n * sumaXX) - (sumaX * sumaX);
-        if (Math.Abs(denominador) < 0.00001d)
-            return null;
+        return new PrediccionGastoTrainingInput
+        {
+            DiaMes = diaSeguro,
+            DiasMes = diasSeguros,
+            PorcentajeMesTranscurrido = diaSeguro / (float)diasSeguros,
+            GastoAcumulado = (float)gastoAcumulado,
+            IngresosMes = (float)ingresosMes,
+            MediaGasto3Meses = (float)mediaHistorica3Meses,
+            GastoMedioDiarioActual = (float)(gastoAcumulado / Math.Max(diaSeguro, 1)),
+            Mes = mes
+        };
+    }
 
-        var pendiente = ((n * sumaXY) - (sumaX * sumaY)) / denominador;
-        var intercepto = (sumaY - (pendiente * sumaX)) / n;
+    private string ResolverRuta(string relativeOrAbsolute)
+    {
+        if (Path.IsPathRooted(relativeOrAbsolute))
+            return relativeOrAbsolute;
 
-        var prediccion = intercepto + (pendiente * diasMes);
-        var gastoActual = acumulado;
-
-        var prediccionDecimal = Math.Max((decimal)prediccion, gastoActual);
-        prediccionDecimal = Math.Max(prediccionDecimal, 0m);
-
-        return Math.Round(prediccionDecimal, 2);
+        return Path.Combine(_contentRootPath ?? AppContext.BaseDirectory, relativeOrAbsolute);
     }
 
     private static void AgregarPatronFinDeSemana(
@@ -309,5 +395,40 @@ public class AnaliticaPredictivaService : IAnaliticaPredictivaService
             DayOfWeek.Sunday => "domingos",
             _ => "días"
         };
+    }
+
+    private sealed class PrediccionGastoTrainingInput
+    {
+        [LoadColumn(0)]
+        public float DiaMes { get; set; }
+
+        [LoadColumn(1)]
+        public float DiasMes { get; set; }
+
+        [LoadColumn(2)]
+        public float PorcentajeMesTranscurrido { get; set; }
+
+        [LoadColumn(3)]
+        public float GastoAcumulado { get; set; }
+
+        [LoadColumn(4)]
+        public float IngresosMes { get; set; }
+
+        [LoadColumn(5)]
+        public float MediaGasto3Meses { get; set; }
+
+        [LoadColumn(6)]
+        public float GastoMedioDiarioActual { get; set; }
+
+        [LoadColumn(7)]
+        public float Mes { get; set; }
+
+        [LoadColumn(8)]
+        public float GastoFinalMes { get; set; }
+    }
+
+    private sealed class PrediccionGastoPrediction
+    {
+        public float Score { get; set; }
     }
 }

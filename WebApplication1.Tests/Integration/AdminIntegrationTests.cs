@@ -124,6 +124,8 @@ public class AdminIntegrationTests : IClassFixture<FinMindApiFactory>
 
         Assert.False(string.IsNullOrWhiteSpace(passwordTemporal));
 
+        _client.DefaultRequestHeaders.Authorization = null;
+
         var loginAntiguo = await _client.PostAsJsonAsync("/api/autenticacion/inicio-sesion", new InicioSesionDto
         {
             Email = userEmail,
@@ -145,6 +147,68 @@ public class AdminIntegrationTests : IClassFixture<FinMindApiFactory>
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", payloadLoginNuevo.Token);
         var intentoPerfil = await _client.GetAsync("/api/autenticacion/perfil");
         Assert.Equal(HttpStatusCode.Forbidden, intentoPerfil.StatusCode);
+    }
+
+    [Fact]
+    public async Task CambiarPassword_ConPasswordTemporal_DesbloqueaAccesoAlPerfil()
+    {
+        const string adminEmail = "admin5@test.com";
+        const string userEmail = "user5@test.com";
+        const string passwordAnterior = "Password!123";
+        const string passwordNueva = "NuevaPassword!123";
+
+        await RegistrarYObtenerTokenAsync(adminEmail, "Admin 5", passwordAnterior);
+        await RegistrarYObtenerTokenAsync(userEmail, "User 5", passwordAnterior);
+
+        await PromocionarAAdminAsync(adminEmail);
+        var adminToken = await IniciarSesionYObtenerTokenAsync(adminEmail, passwordAnterior);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var userId = await ObtenerUsuarioIdPorEmailAsync(userEmail);
+        var resetResponse = await _client.PostAsync($"/api/admin/usuarios/{userId}/reset-password", content: null);
+        resetResponse.EnsureSuccessStatusCode();
+
+        var json = await resetResponse.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(json);
+        var passwordTemporal = document.RootElement.GetProperty("passwordTemporal").GetString();
+
+        Assert.False(string.IsNullOrWhiteSpace(passwordTemporal));
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        var loginTemporal = await _client.PostAsJsonAsync("/api/autenticacion/inicio-sesion", new InicioSesionDto
+        {
+            Email = userEmail,
+            Password = passwordTemporal!
+        });
+        loginTemporal.EnsureSuccessStatusCode();
+
+        var payloadLoginTemporal = await loginTemporal.Content.ReadFromJsonAsync<AutenticacionResponseDto>();
+        Assert.NotNull(payloadLoginTemporal);
+        Assert.True(payloadLoginTemporal!.DebeCambiarPassword);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", payloadLoginTemporal.Token);
+        var cambiarPassword = await _client.PostAsJsonAsync("/api/autenticacion/cambiar-password", new CambiarPasswordDto
+        {
+            PasswordActual = passwordTemporal!,
+            PasswordNueva = passwordNueva
+        });
+        cambiarPassword.EnsureSuccessStatusCode();
+
+        _client.DefaultRequestHeaders.Authorization = null;
+        var loginNuevo = await _client.PostAsJsonAsync("/api/autenticacion/inicio-sesion", new InicioSesionDto
+        {
+            Email = userEmail,
+            Password = passwordNueva
+        });
+        loginNuevo.EnsureSuccessStatusCode();
+
+        var payloadLoginNuevo = await loginNuevo.Content.ReadFromJsonAsync<AutenticacionResponseDto>();
+        Assert.NotNull(payloadLoginNuevo);
+        Assert.False(payloadLoginNuevo!.DebeCambiarPassword);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", payloadLoginNuevo.Token);
+        var perfil = await _client.GetAsync("/api/autenticacion/perfil");
+        perfil.EnsureSuccessStatusCode();
     }
 
     private async Task<string> RegistrarYObtenerTokenAsync(string email, string nombre, string password = "Password!123")

@@ -208,6 +208,141 @@ public class TransaccionesServiceTests
         Assert.Equal(categoriaId, resultado.CategoriaId);
     }
 
+    [Fact]
+    public async Task CrearManualAsync_CuentaDeOtroUsuario_LanzaInvalidOperationException()
+    {
+        await using var context = CrearContextoEnMemoria();
+        var usuarioId = Guid.NewGuid();
+        var otroUsuarioId = Guid.NewGuid();
+        var cuentaId = Guid.NewGuid();
+
+        context.Usuarios.AddRange(
+            new Usuario
+            {
+                Id = usuarioId,
+                Email = "usuario@finmind.dev",
+                PasswordHash = "hash",
+                Nombre = "Usuario",
+                MonedaPreferida = "EUR",
+                Idioma = "es"
+            },
+            new Usuario
+            {
+                Id = otroUsuarioId,
+                Email = "otro-cuenta@finmind.dev",
+                PasswordHash = "hash",
+                Nombre = "Otro",
+                MonedaPreferida = "EUR",
+                Idioma = "es"
+            });
+
+        context.CuentasBancarias.Add(new CuentaBancaria
+        {
+            Id = cuentaId,
+            UsuarioId = otroUsuarioId,
+            Banco = "Banco Test",
+            Nombre = "Cuenta otro usuario",
+            Moneda = "EUR",
+            Activa = true
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = CrearServicio(context);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CrearManualAsync(
+            new CrearTransaccionManualRequestDto
+            {
+                CuentaBancariaId = cuentaId,
+                Importe = 12m,
+                Tipo = 2,
+                Fecha = DateTime.UtcNow,
+                Descripcion = "Compra"
+            },
+            usuarioId));
+    }
+
+    [Fact]
+    public async Task CrearManualAsync_SiIAFalla_GuardaTransaccionSinCategoria()
+    {
+        await using var context = CrearContextoEnMemoria();
+        var usuarioId = Guid.NewGuid();
+
+        context.Usuarios.Add(new Usuario
+        {
+            Id = usuarioId,
+            Email = "ia-falla@finmind.dev",
+            PasswordHash = "hash",
+            Nombre = "IA Falla",
+            MonedaPreferida = "EUR",
+            Idioma = "es"
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = new TransaccionesService(
+            context,
+            new TinkBankingServiceFake(),
+            new IAFinanzasServiceFake(fallarSugerencia: true),
+            NullLogger<TransaccionesService>.Instance);
+
+        var resultado = await service.CrearManualAsync(new CrearTransaccionManualRequestDto
+        {
+            Importe = 18m,
+            Tipo = 2,
+            Fecha = DateTime.UtcNow,
+            Descripcion = "Compra sin categoria"
+        }, usuarioId);
+
+        Assert.Null(resultado.CategoriaId);
+
+        var enBd = await context.Transacciones.SingleAsync(t => t.Id == resultado.Id);
+        Assert.Null(enBd.CategoriaId);
+    }
+
+    [Fact]
+    public async Task ObtenerPorUsuarioAsync_PaginacionInvalida_NormalizaValores()
+    {
+        await using var context = CrearContextoEnMemoria();
+        var usuarioId = Guid.NewGuid();
+
+        context.Usuarios.Add(new Usuario
+        {
+            Id = usuarioId,
+            Email = "pagina@finmind.dev",
+            PasswordHash = "hash",
+            Nombre = "Pagina",
+            MonedaPreferida = "EUR",
+            Idioma = "es"
+        });
+
+        context.Transacciones.Add(new Transaccion
+        {
+            Id = Guid.NewGuid(),
+            UsuarioId = usuarioId,
+            Importe = 5m,
+            Moneda = "EUR",
+            Tipo = TipoTransaccion.Gasto,
+            Origen = OrigenTransaccion.Manual,
+            Fecha = DateTime.UtcNow,
+            Descripcion = "Movimiento"
+        });
+
+        await context.SaveChangesAsync();
+
+        var service = CrearServicio(context);
+
+        var resultado = await service.ObtenerPorUsuarioAsync(
+            usuarioId,
+            pagina: 0,
+            tamanyo: 0);
+
+        Assert.Equal(1, resultado.Pagina);
+        Assert.Equal(20, resultado.Tamanyo);
+        Assert.Equal(1, resultado.Total);
+        Assert.Single(resultado.Items);
+    }
+
     private static TransaccionesService CrearServicio(FinMindDbContext context)
     {
         return new TransaccionesService(
@@ -245,17 +380,25 @@ public class TransaccionesServiceTests
     private sealed class IAFinanzasServiceFake : IIAFinanzasService
     {
         private readonly Guid? _categoriaId;
+        private readonly bool _fallarSugerencia;
 
-        public IAFinanzasServiceFake(Guid? categoriaId = null)
+        public IAFinanzasServiceFake(Guid? categoriaId = null, bool fallarSugerencia = false)
         {
             _categoriaId = categoriaId;
+            _fallarSugerencia = fallarSugerencia;
         }
 
         public Task<EntrenamientoModeloCategoriasResponseDto> EntrenarModeloCategoriasAsync(bool forzar = false, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<SugerenciaCategoriaResponseDto> SugerirCategoriaAsync(SugerenciaCategoriaRequestDto request, CancellationToken cancellationToken = default)
-            => Task.FromResult(new SugerenciaCategoriaResponseDto
+        {
+            if (_fallarSugerencia)
+            {
+                throw new InvalidOperationException("Fallo simulado de IA.");
+            }
+
+            return Task.FromResult(new SugerenciaCategoriaResponseDto
             {
                 MejorSugerencia = _categoriaId.HasValue
                     ? new CategoriaSugeridaDto
@@ -272,5 +415,6 @@ public class TransaccionesServiceTests
                 RequiereConfirmacion = true,
                 UmbralAutoasignacion = 0.7m
             });
+        }
     }
 }
