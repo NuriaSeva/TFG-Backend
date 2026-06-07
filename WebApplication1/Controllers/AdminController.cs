@@ -9,9 +9,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Microsoft.ML;
-using Microsoft.ML.Data;
 
 namespace FinMind.Controllers;
 
@@ -24,20 +21,17 @@ public class AdminController : ControllerBase
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<AdminController> _logger;
     private readonly IPasswordHasher<Usuario> _passwordHasher;
-    private readonly IAOptions _iaOptions;
 
     public AdminController(
         FinMindDbContext context,
         IWebHostEnvironment environment,
         ILogger<AdminController> logger,
-        IPasswordHasher<Usuario> passwordHasher,
-        IOptions<IAOptions> iaOptions)
+        IPasswordHasher<Usuario> passwordHasher)
     {
         _context = context;
         _environment = environment;
         _logger = logger;
         _passwordHasher = passwordHasher;
-        _iaOptions = iaOptions.Value;
     }
 
     [HttpGet("usuarios")]
@@ -197,92 +191,8 @@ public class AdminController : ControllerBase
         }
 
         response.Almacenamiento = ObtenerEstadoDisco();
-        response.ModeloPrediccionGasto = ObtenerEstadoModeloPrediccionGasto();
 
         return Ok(response);
-    }
-
-    private AdminModeloPrediccionGastoDto ObtenerEstadoModeloPrediccionGasto()
-    {
-        var datasetPath = ResolverRuta(_iaOptions.PrediccionGastoDatasetPath);
-        var modelPath = ResolverRuta(Path.Combine(_iaOptions.ModelOutputPath, _iaOptions.PrediccionGastoModelFileName));
-
-        var response = new AdminModeloPrediccionGastoDto
-        {
-            DatasetDisponible = System.IO.File.Exists(datasetPath),
-            ModeloDisponible = System.IO.File.Exists(modelPath),
-            FechaModeloUtc = System.IO.File.Exists(modelPath)
-                ? System.IO.File.GetLastWriteTimeUtc(modelPath)
-                : null
-        };
-
-        if (!response.DatasetDisponible)
-        {
-            response.Mensaje = "Dataset de prediccion no disponible.";
-            return response;
-        }
-
-        try
-        {
-            var mlContext = new MLContext(seed: 12);
-            var data = mlContext.Data.LoadFromTextFile<PrediccionGastoTrainingInput>(
-                path: datasetPath,
-                hasHeader: true,
-                separatorChar: ';',
-                allowQuoting: true,
-                trimWhitespace: true);
-
-            response.RegistrosDataset = mlContext.Data
-                .CreateEnumerable<PrediccionGastoTrainingInput>(data, reuseRowObject: false)
-                .Count();
-
-            if (response.RegistrosDataset < 20)
-            {
-                response.Mensaje = "Dataset insuficiente para evaluacion.";
-                return response;
-            }
-
-            var split = mlContext.Data.TrainTestSplit(data, testFraction: 0.2, seed: 12);
-            var pipeline = mlContext.Transforms.Concatenate(
-                    "Features",
-                    nameof(PrediccionGastoTrainingInput.DiaMes),
-                    nameof(PrediccionGastoTrainingInput.DiasMes),
-                    nameof(PrediccionGastoTrainingInput.PorcentajeMesTranscurrido),
-                    nameof(PrediccionGastoTrainingInput.GastoAcumulado),
-                    nameof(PrediccionGastoTrainingInput.IngresosMes),
-                    nameof(PrediccionGastoTrainingInput.MediaGasto3Meses),
-                    nameof(PrediccionGastoTrainingInput.GastoMedioDiarioActual),
-                    nameof(PrediccionGastoTrainingInput.Mes))
-                .Append(mlContext.Regression.Trainers.Sdca(
-                    labelColumnName: nameof(PrediccionGastoTrainingInput.GastoFinalMes),
-                    featureColumnName: "Features"));
-
-            var model = pipeline.Fit(split.TrainSet);
-            var predictions = model.Transform(split.TestSet);
-            var metrics = mlContext.Regression.Evaluate(
-                predictions,
-                labelColumnName: nameof(PrediccionGastoTrainingInput.GastoFinalMes));
-
-            response.Mae = Math.Round((decimal)metrics.MeanAbsoluteError, 2);
-            response.Rmse = Math.Round((decimal)metrics.RootMeanSquaredError, 2);
-            response.R2 = Math.Round((decimal)metrics.RSquared, 4);
-            response.Mensaje = "Metricas calculadas sobre particion de test del dataset.";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "No se pudieron calcular las metricas del modelo de prediccion de gasto.");
-            response.Mensaje = "No se pudieron calcular las metricas del modelo.";
-        }
-
-        return response;
-    }
-
-    private string ResolverRuta(string relativeOrAbsolute)
-    {
-        if (Path.IsPathRooted(relativeOrAbsolute))
-            return relativeOrAbsolute;
-
-        return Path.Combine(_environment.ContentRootPath, relativeOrAbsolute);
     }
 
     private async Task<long?> ObtenerTamanoBaseDatosAsync(string provider)
@@ -375,33 +285,4 @@ public class AdminController : ControllerBase
         return usuarioId;
     }
 
-    private sealed class PrediccionGastoTrainingInput
-    {
-        [LoadColumn(0)]
-        public float DiaMes { get; set; }
-
-        [LoadColumn(1)]
-        public float DiasMes { get; set; }
-
-        [LoadColumn(2)]
-        public float PorcentajeMesTranscurrido { get; set; }
-
-        [LoadColumn(3)]
-        public float GastoAcumulado { get; set; }
-
-        [LoadColumn(4)]
-        public float IngresosMes { get; set; }
-
-        [LoadColumn(5)]
-        public float MediaGasto3Meses { get; set; }
-
-        [LoadColumn(6)]
-        public float GastoMedioDiarioActual { get; set; }
-
-        [LoadColumn(7)]
-        public float Mes { get; set; }
-
-        [LoadColumn(8)]
-        public float GastoFinalMes { get; set; }
-    }
 }
